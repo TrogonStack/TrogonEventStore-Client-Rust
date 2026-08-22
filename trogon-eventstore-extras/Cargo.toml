@@ -1,0 +1,21 @@
+[package]
+authors = ["Straw Hat, LLC"]
+name = "trogon-eventstore-extras"
+version = "0.0.1"
+publish = false
+edition = "2024"
+
+license = "Apache-2.0 AND MIT"
+
+description = "Extra features for the TrogonEventStore Rust gRPC client"
+keywords = ["database", "eventsourcing", "eventstore", "eventstoredb", "grpc"]
+repository = "https://github.com/TrogonStack/TrogonEventStore-Client-Rust"
+categories = ["database", "api-bindings"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# will move to version number once we got something stable.
+trogon-eventstore = { path = "../trogon-eventstore", version = "0.0.1" }
+chrono = { version = "0.4", default-features = false }
+log = "0.4"

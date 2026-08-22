@@ -217,7 +217,7 @@ let options = ReadAllOptions::default()
 ### Reading backwards
 
 In addition to reading the `$all` stream forwards, it can be read backwards. To
-read all the events backwards, set the _direction_ to `kurrentdb.Backwards`:
+read all the events backwards, set the _direction_ to `trogon_eventstore::Backwards`:
 
 ```rs
 let options = ReadAllOptions::default().position(StreamPosition::End);

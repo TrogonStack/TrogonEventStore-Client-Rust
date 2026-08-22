@@ -5,12 +5,12 @@
 #![allow(unreachable_code)]
 
 use futures::TryStreamExt;
-use kurrentdb::{
+use serde::{Deserialize, Serialize};
+use std::error::Error;
+use trogon_eventstore::{
     Client, Credentials, EventData, Position, RetryOptions, StreamPosition, StreamState,
     SubscribeToAllOptions, SubscribeToStreamOptions, SubscriptionEvent, SubscriptionFilter,
 };
-use serde::{Deserialize, Serialize};
-use std::error::Error;
 use uuid::Uuid;
 
 type Result<A> = std::result::Result<A, Box<dyn Error>>;

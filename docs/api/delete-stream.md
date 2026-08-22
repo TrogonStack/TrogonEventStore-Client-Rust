@@ -43,7 +43,7 @@ specific conditions. Note that when a stream is hard deleted, you cannot reuse
 the stream name, it will raise an exception if you try to append to it again.
 
 ```rs
-options := kurrentdb.TombstoneStreamOptions{
+options := trogon_eventstore::TombstoneStreamOptions{
 let options = TombstoneStreamOptions::default();
 client
     .tombstone_stream(stream_name, &options)

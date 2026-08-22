@@ -1,0 +1,56 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "d76e58ba464b2dc77c196ffefbca330ce9df938d",
+  "group-pull-request-title-pattern": "chore${scope}: release${component} ${version}",
+  "signoff": "SHT Bot <61149376+sht-bot@users.noreply.github.com>",
+  "plugins": [
+    {
+      "type": "cargo-workspace",
+      "merge": false
+    },
+    {
+      "type": "linked-versions",
+      "groupName": "TrogonEventStore Rust Client",
+      "components": [
+        "trogon-eventstore",
+        "trogon-eventstore-macros",
+        "trogon-eventstore-extras"
+      ]
+    }
+  ],
+  "packages": {
+    "trogon-eventstore": {
+      "release-type": "rust",
+      "package-name": "trogon-eventstore",
+      "component": "trogon-eventstore",
+      "include-component-in-tag": true,
+      "include-v-in-tag": true,
+      "tag-separator": "@",
+      "pull-request-title-pattern": "chore${scope}: release${component} ${version}",
+      "bump-minor-pre-major": false,
+      "bump-patch-for-minor-pre-major": false
+    },
+    "trogon-eventstore-macros": {
+      "release-type": "rust",
+      "package-name": "trogon-eventstore-macros",
+      "component": "trogon-eventstore-macros",
+      "include-component-in-tag": true,
+      "include-v-in-tag": true,
+      "tag-separator": "@",
+      "pull-request-title-pattern": "chore${scope}: release${component} ${version}",
+      "bump-minor-pre-major": false,
+      "bump-patch-for-minor-pre-major": false
+    },
+    "trogon-eventstore-extras": {
+      "release-type": "rust",
+      "package-name": "trogon-eventstore-extras",
+      "component": "trogon-eventstore-extras",
+      "include-component-in-tag": true,
+      "include-v-in-tag": true,
+      "tag-separator": "@",
+      "pull-request-title-pattern": "chore${scope}: release${component} ${version}",
+      "bump-minor-pre-major": false,
+      "bump-patch-for-minor-pre-major": false
+    }
+  }
+}
