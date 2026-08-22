@@ -1,0 +1,125 @@
+name: Integration Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      server_registry:
+        description: Server image registry
+        required: true
+        type: string
+        default: docker.io
+      server_repository:
+        description: Server image repository
+        required: true
+        type: string
+        default: eventstore
+      server_container:
+        description: Server image name
+        required: true
+        type: string
+        default: eventstore
+      server_version:
+        description: Server image tag
+        required: true
+        type: string
+        default: latest
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  ESDB_DOCKER_REGISTRY: ${{ inputs.server_registry }}
+  ESDB_DOCKER_REPO: ${{ inputs.server_repository }}
+  ESDB_DOCKER_CONTAINER: ${{ inputs.server_container }}
+  ESDB_DOCKER_CONTAINER_VERSION: ${{ inputs.server_version }}
+
+jobs:
+  single-node:
+    name: Single node (${{ matrix.test }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - single_node_streams
+          - single_node_projections
+          - single_node_persistent_subscriptions
+          - single_node_discover_error
+          - single_node_auto_resub_on_connection_drop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        shell: bash
+        run: |
+          rustup set profile minimal
+          rustup update stable
+          rustup default stable
+      - name: Run integration test
+        run: cargo test --package trogon-eventstore --test integration ${{ matrix.test }} -- --exact
+
+  secure-single-node:
+    name: Secure single node (${{ matrix.test }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - single_node_operations
+          - root_certificates
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        shell: bash
+        run: |
+          rustup set profile minimal
+          rustup update stable
+          rustup default stable
+      - name: Generate certificates
+        run: docker compose --file configure-tls-for-tests.yml up --abort-on-container-exit --exit-code-from setup
+      - name: Run secure integration test
+        env:
+          SECURE: "true"
+        run: cargo test --package trogon-eventstore --test integration ${{ matrix.test }} -- --exact
+      - name: Clean up certificate services
+        if: always()
+        run: docker compose --file configure-tls-for-tests.yml down --volumes
+
+  cluster:
+    name: Cluster (${{ matrix.test }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - cluster_streams
+          - cluster_projections
+          - cluster_persistent_subscriptions
+          - cluster_operations
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        shell: bash
+        run: |
+          rustup set profile minimal
+          rustup update stable
+          rustup default stable
+      - name: Start cluster
+        run: docker compose up --detach
+      - name: Run cluster integration test
+        run: cargo test --package trogon-eventstore --test integration ${{ matrix.test }} -- --exact
+      - name: Stop cluster
+        if: always()
+        run: docker compose down --volumes

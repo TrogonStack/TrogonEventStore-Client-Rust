@@ -4,12 +4,12 @@
 #![allow(unused_variables)]
 
 use futures::TryStreamExt;
-use kurrentdb::{
+use serde::{Deserialize, Serialize};
+use std::error::Error;
+use trogon_eventstore::{
     AppendToStreamOptions, Client, Credentials, EventData, ReadStreamOptions, StreamPosition,
     StreamState,
 };
-use serde::{Deserialize, Serialize};
-use std::error::Error;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]

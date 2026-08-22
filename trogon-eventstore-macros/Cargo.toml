@@ -1,0 +1,20 @@
+[package]
+authors = ["Straw Hat, LLC"]
+name = "trogon-eventstore-macros"
+version = "0.0.1"
+publish = false
+edition = "2021"
+license = "Apache-2.0 AND MIT"
+
+description = "Internal proc-macros for the TrogonEventStore Rust client"
+keywords = ["database", "eventsourcing", "eventstore", "trogon", "grpc"]
+repository = "https://github.com/TrogonStack/TrogonEventStore-Client-Rust"
+categories = ["database", "api-bindings"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1", features = ["full", "fold", "extra-traits"] }
+quote = "1"

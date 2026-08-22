@@ -4,8 +4,8 @@
 #![allow(unused_variables)]
 #![allow(unreachable_code)]
 
-use kurrentdb::Client;
 use std::error::Error;
+use trogon_eventstore::Client;
 
 type Result<A> = std::result::Result<A, Box<dyn Error>>;
 

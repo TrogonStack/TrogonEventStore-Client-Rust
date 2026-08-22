@@ -1,19 +1,12 @@
-# KurrentDB Rust Client
-[![Crates.io][crates-badge]][crates-url]
-[![Crates.io][crates-download]][crates-url]
+# TrogonEventStore Rust Client
 [![Build Status][ci-badge]][ci-url]
-![Discord](https://img.shields.io/discord/415421715385155584.svg)
-![Crates.io](https://img.shields.io/crates/l/kurrentdb.svg)
 
-[crates-badge]: https://img.shields.io/crates/v/kurrentdb.svg
-[crates-download]: https://img.shields.io/crates/d/kurrentdb.svg
-[crates-url]: https://crates.io/crates/kurrentdb
-[ci-badge]: https://github.com/EventStore/EventStoreDB-Client-Rust/workflows/CI/badge.svg
-[ci-url]: https://github.com/EventStore/EventStoreDB-Client-Rust/actions
+[ci-badge]: https://github.com/TrogonStack/TrogonEventStore-Client-Rust/actions/workflows/ci.yml/badge.svg
+[ci-url]: https://github.com/TrogonStack/TrogonEventStore-Client-Rust/actions
 
-[Documentation](https://docs.rs/kurrentdb)
+[Documentation](docs)
 
-Official Rust [KurrentDB rust gRPC] gRPC Client.
+Community-maintained Rust gRPC client for TrogonEventStore, derived from the KurrentDB Rust client.
 
 [KurrentDB] is the event-native database, where business events are immutably stored and streamed. Designed for event-sourced, event-driven, and microservices architectures.
 
@@ -23,10 +16,19 @@ This client is compatible with version `20.6.1` upwards and works on Linux, MacO
 
 Server setup instructions can be found here [KurrentDB Docs], follow the docker setup for the simplest configuration.
 
-# Example
+## Installation
+
+```toml
+[dependencies]
+trogon-eventstore = { git = "https://github.com/TrogonStack/TrogonEventStore-Client-Rust", tag = "trogon-eventstore@v0.1.0" }
+```
+
+Cargo registry publishing is not currently configured. Use a tagged GitHub release as the dependency source.
+
+## Example
 
 ```rust
-use kurrentdb::{ Client, EventData };
+use trogon_eventstore::{Client, EventData};
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -78,6 +80,10 @@ Information on support can be found here: [KurrentDB Support]
 Documentation for KurrentDB can be found here: [KurrentDB Docs]
 
 Bear in mind that this client is not yet properly documented. We are working hard on a new version of the documentation.
+
+## License
+
+TrogonEventStore Rust Client is licensed under the Apache License 2.0. It is derived from software originally licensed under the MIT License. The complete inherited MIT notice is preserved in [LICENSES/MIT.txt](LICENSES/MIT.txt).
 
 ## Communities
 

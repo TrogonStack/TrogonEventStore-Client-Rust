@@ -80,7 +80,7 @@ Storing additional information alongside your event that is part of the event it
 
 ### ContentType
 
-The content type indicates whether the event is stored as JSON or binary format. You can choose between `kurrentdb.ContentTypeJson` and `kurrentdb.ContentTypeBinary` when creating your `EventData` object. 
+The content type indicates whether the event is stored as JSON or binary format. You can choose between `trogon_eventstore::ContentTypeJson` and `trogon_eventstore::ContentTypeBinary` when creating your `EventData` object.
 
 ## Handling concurrency
 

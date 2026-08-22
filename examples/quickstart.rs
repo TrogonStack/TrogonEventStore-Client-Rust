@@ -4,11 +4,11 @@
 #![allow(unused_variables)]
 #![allow(unused_must_use)]
 
-use kurrentdb::{
-    AppendToStreamOptions, Client, Credentials, EventData, ReadStreamOptions, StreamState,
-};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use trogon_eventstore::{
+    AppendToStreamOptions, Client, Credentials, EventData, ReadStreamOptions, StreamState,
+};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]

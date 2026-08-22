@@ -1,0 +1,74 @@
+name: SemConv
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+permissions:
+  pull-requests: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate pull request title and commits
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          pattern='^(feat|fix|chore)(\([A-Za-z0-9][A-Za-z0-9._/-]*\))?!?: .+'
+
+          if [[ ! "$PR_TITLE" =~ $pattern ]]; then
+            echo "Invalid pull request title: $PR_TITLE" >&2
+            exit 1
+          fi
+
+          if ! commit_records=$(gh api --paginate \
+            "repos/$REPOSITORY/pulls/$PR_NUMBER/commits" \
+            --jq '.[] | {
+              parent_count: (.parents | length),
+              subject: (.commit.message | split("\n")[0])
+            }'); then
+            echo "Unable to enumerate pull request commits." >&2
+            exit 1
+          fi
+
+          if [ -z "$commit_records" ]; then
+            echo "Pull request contains no commits." >&2
+            exit 1
+          fi
+
+          invalid_commits=0
+          non_merge_commits=0
+          while IFS= read -r record; do
+            if ! parent_count=$(jq -er '.parent_count' <<< "$record") ||
+              ! subject=$(jq -er '.subject' <<< "$record"); then
+              echo "Unable to parse pull request commit metadata." >&2
+              exit 1
+            fi
+
+            if [ "$parent_count" -gt 1 ]; then
+              continue
+            fi
+
+            non_merge_commits=$((non_merge_commits + 1))
+            if [[ ! "$subject" =~ $pattern ]]; then
+              echo "Invalid commit subject: $subject" >&2
+              invalid_commits=1
+            fi
+          done <<< "$commit_records"
+
+          if [ "$non_merge_commits" -eq 0 ]; then
+            echo "Pull request contains no non-merge commits." >&2
+            exit 1
+          fi
+
+          exit "$invalid_commits"

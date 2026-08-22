@@ -1,10 +1,10 @@
 [workspace]
 resolver = "2"
 members = [
-    "kurrentdb",
-    "kurrentdb-extras",
+    "trogon-eventstore",
+    "trogon-eventstore-extras",
 
     # internals
-    "kurrentdb-macros",
+    "trogon-eventstore-macros",
     "examples"
 ]
