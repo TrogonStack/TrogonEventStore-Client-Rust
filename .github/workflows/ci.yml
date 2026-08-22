@@ -37,6 +37,8 @@ jobs:
           rustup default stable
       - name: Check workspace
         run: cargo check --workspace --all-targets
+      - name: Check examples
+        run: cargo check --manifest-path examples/Cargo.toml --all-targets
       - name: Run library tests
         run: cargo test --workspace --lib
 

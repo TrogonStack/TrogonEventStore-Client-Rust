@@ -536,16 +536,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "examples"
-version = "0.0.0"
-dependencies = [
- "futures",
- "serde",
- "trogon-eventstore",
- "uuid",
-]
-
-[[package]]
 name = "eyre"
 version = "0.6.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
