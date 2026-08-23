@@ -2641,7 +2641,7 @@ dependencies = [
 
 [[package]]
 name = "trogon-eventstore"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "async-stream",
  "base64",
@@ -2685,7 +2685,7 @@ dependencies = [
 
 [[package]]
 name = "trogon-eventstore-extras"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "log",
@@ -2694,7 +2694,7 @@ dependencies = [
 
 [[package]]
 name = "trogon-eventstore-macros"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "quote",
  "syn 1.0.109",

@@ -2,7 +2,7 @@
 authors = ["Straw Hat, LLC"]
 edition = "2024"
 name = "trogon-eventstore"
-version = "0.0.1"
+version = "0.1.0"
 publish = false
 
 # Uncomment if you want to update messages.rs code-gen.
@@ -29,7 +29,7 @@ chrono = { version = "0.4", default-features = false, features = [
     "serde",
     "now",
 ] }
-trogon-eventstore-macros = { path = "../trogon-eventstore-macros", version = "0.0.1" }
+trogon-eventstore-macros = { path = "../trogon-eventstore-macros", version = "0.1.0" }
 futures = "0.3"
 http = "1"
 hyper = { version = "1", features = ["client"] }
