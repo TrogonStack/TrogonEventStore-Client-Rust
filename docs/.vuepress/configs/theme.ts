@@ -1,13 +1,11 @@
 import type {ThemeOptions} from "vuepress-theme-hope";
 
 export const themeOptions: ThemeOptions = {
-    logo: "/Kurrent Logo - Plum.svg",
-    logoDark: "/Kurrent Logo - White.svg",
     docsDir: 'docs',
     editLink: false,
     lastUpdated: true,
     toc: true,
-    repo: "https://github.com/kurrent-io",
+    repo: "https://github.com/TrogonStack/TrogonEventStore-Client-Rust",
     repoLabel: "GitHub",
     repoDisplay: true,
     contributors: false,
@@ -33,4 +31,3 @@ export const themeOptions: ThemeOptions = {
         }
     }
 }
-

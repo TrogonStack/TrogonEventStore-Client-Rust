@@ -1,6 +1,5 @@
 use rustls::pki_types::pem::PemObject;
 use std::cmp::Ordering;
-use std::collections::HashSet;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 use std::sync::Once;
@@ -258,11 +257,11 @@ fn default_keep_alive_timeout() -> Duration {
     ClientSettings::default().keep_alive_timeout
 }
 
-/// Gathers all the settings related to a gRPC client with a KurrentDB database.
+/// Gathers all the settings related to a gRPC client with a TrogonEventStore database.
 /// `ClientSettings` can only be created when parsing a connection string.
 ///
 /// ```
-/// # use kurrent::ClientSettings;
+/// # use trogon_eventstore::ClientSettings;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let setts = "esdb://localhost:1234?tls=false".parse::<ClientSettings>()?;
 /// # Ok(())
@@ -273,7 +272,7 @@ fn default_keep_alive_timeout() -> Duration {
 /// For example, you can define a cluster-mode client based on a fixed set of gossip seeds:
 ///
 /// ```
-/// # use kurrent::ClientSettings;
+/// # use trogon_eventstore::ClientSettings;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let setts = "esdb://localhost:1111,localhost:2222,localhost:3333".parse::<ClientSettings>()?;
 /// # Ok(())
@@ -283,7 +282,7 @@ fn default_keep_alive_timeout() -> Duration {
 /// Same example except we are using DNS discovery this time. The client will perform SRV queries
 /// to resolve all the node associated to that domain:
 /// ```
-/// # use kurrent::ClientSettings;
+/// # use trogon_eventstore::ClientSettings;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let setts = "esdb+discover://mydomain:1234".parse::<ClientSettings>()?;
 /// # Ok(())
@@ -453,33 +452,23 @@ where
     }
 }
 
-lazy_static::lazy_static! {
-    static ref SUPPORTED_PROTOCOLS: HashSet<&'static str> = {
-        let mut s = HashSet::new();
-        s.insert("esdb");
-        s.insert("esdb+discover");
-        s.insert("kurrentdb");
-        s.insert("kurrentdb+discover");
-        s.insert("kurrent");
-        s.insert("kurrent+discover");
-        s.insert("kdb");
-        s.insert("kdb+discover");
-        s
-    };
-}
+const DIRECT_CONNECTION_SCHEME: &str = "esdb";
+const DISCOVER_CONNECTION_SCHEME: &str = "esdb+discover";
 
 fn parse_from_url(
     mut result: ClientSettings,
     url: Url,
 ) -> Result<ClientSettings, ClientSettingsParseError> {
-    if !SUPPORTED_PROTOCOLS.contains(url.scheme()) {
-        return Err(ClientSettingsParseError {
-            message: format!("Unknown URL scheme: {}", url.scheme()),
-            error: None,
-        });
-    }
-
-    result.dns_discover = url.scheme().contains("+discover");
+    result.dns_discover = match url.scheme() {
+        DIRECT_CONNECTION_SCHEME => false,
+        DISCOVER_CONNECTION_SCHEME => true,
+        scheme => {
+            return Err(ClientSettingsParseError {
+                message: format!("Unknown URL scheme: {scheme}"),
+                error: None,
+            });
+        }
+    };
 
     if !url.username().is_empty() {
         result.default_user_name = Some(Credentials::new(
@@ -1264,7 +1253,7 @@ impl GrpcClient {
 pub(crate) fn handle_error(sender: &UnboundedSender<Msg>, connection_id: Uuid, err: &crate::Error) {
     if let crate::Error::ServerError(status) = err {
         error!(
-            "Current selected KurrentDB node gone unavailable. Starting node selection process: {}",
+            "Current selected node became unavailable. Starting node selection process: {}",
             status
         );
 

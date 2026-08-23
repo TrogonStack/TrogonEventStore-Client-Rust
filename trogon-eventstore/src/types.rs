@@ -53,7 +53,7 @@ impl Credentials {
     }
 }
 
-/// Authentication mode used when sending a request to KurrentDB.
+/// Authentication mode used when sending a request to TrogonEventStore.
 ///
 /// Supports HTTP Basic auth (login + password) and Bearer token auth (e.g. an
 /// OAuth/OIDC access token). `Authentication` implements `From<Credentials>`,
@@ -143,11 +143,11 @@ where
 
 /// Constants used for expected version control.
 /// The use of expected version can be a bit tricky especially when discussing
-/// assurances given by the KurrentDB server.
+/// assurances given by the TrogonEventStore server.
 ///
-/// The KurrentDB server will assure idempotency for all operations using
+/// The TrogonEventStore server will assure idempotency for all operations using
 /// any value in `StreamState` except `StreamState::Any`. When using
-/// `StreamState::Any`, the KurrentDB server will do its best to assure
+/// `StreamState::Any`, the TrogonEventStore server will do its best to assure
 /// idempotency but will not guarantee idempotency.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum StreamState {
@@ -174,7 +174,7 @@ impl std::fmt::Display for StreamState {
 }
 
 /// A structure referring to a potential logical record position in the
-/// KurrentDB transaction file.
+/// TrogonEventStore transaction file.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Position {
     /// Commit position of the record.
@@ -738,7 +738,7 @@ impl<'de> Visitor<'de> for AclVisitor {
     type Value = Option<Acl>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(formatter, "a KurrentDB ACL")
+        write!(formatter, "a TrogonEventStore ACL")
     }
 
     fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
@@ -940,7 +940,7 @@ impl<'de> Visitor<'de> for RolesVisitor {
     type Value = Option<Vec<String>>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(formatter, "a KurrentDB role or role list")
+        write!(formatter, "a TrogonEventStore role or role list")
     }
 
     fn visit_none<E>(self) -> std::result::Result<Self::Value, E>
@@ -1457,7 +1457,7 @@ pub struct Endpoint {
 }
 
 #[derive(Error, Debug, Clone)]
-/// KurrentDB command error.
+/// TrogonEventStore command error.
 pub enum Error {
     #[error("Server-side error: {0}")]
     ServerError(String),
@@ -1585,7 +1585,7 @@ impl Error {
 }
 
 #[derive(Error, Debug, Clone)]
-/// KurrentDB command error.
+/// TrogonEventStore command error.
 pub enum GrpcConnectionError {
     #[error("Max discovery attempt count reached. count: {0}")]
     MaxDiscoveryAttemptReached(usize),

@@ -11,5 +11,3 @@ Disallow: /codeql-analysis.yml
 Disallow: /package.json
 Disallow: /serve.js
 Disallow: /yarn.lock
-
-Sitemap: https://docs.kurrent.io/sitemap.xml
