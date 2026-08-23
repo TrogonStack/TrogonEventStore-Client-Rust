@@ -1,7 +1,7 @@
 [package]
 authors = ["Straw Hat, LLC"]
 name = "trogon-eventstore-extras"
-version = "0.0.1"
+version = "0.1.0"
 publish = false
 edition = "2024"
 
@@ -16,6 +16,6 @@ categories = ["database", "api-bindings"]
 
 [dependencies]
 # will move to version number once we got something stable.
-trogon-eventstore = { path = "../trogon-eventstore", version = "0.0.1" }
+trogon-eventstore = { path = "../trogon-eventstore", version = "0.1.0" }
 chrono = { version = "0.4", default-features = false }
 log = "0.4"
