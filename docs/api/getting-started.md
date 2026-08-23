@@ -19,8 +19,10 @@ serde = "1.0.188"
 futures = "0.3.28"
 tokio = {version = "1.32.0", features = ["full"]}
 
-[dependencies.eventstore]
-version = "4.0.0"
+[dependencies.trogon-eventstore]
+git = "https://github.com/TrogonStack/TrogonEventStore-Client-Rust"
+tag = "trogon-eventstore@v0.1.0"
+version = "0.1.0"
 ```
 
 ## Connecting to TrogonEventStore
@@ -49,7 +51,7 @@ topology, including single-node setups.
 
 For cluster connections using discovery, use the following format:
 
-```
+```text
 esdb+discover://admin:changeit@cluster.dns.name:2113
 ```
 
@@ -57,13 +59,13 @@ Where `cluster.dns.name` is a DNS `A` record that points to all cluster nodes.
 
 For direct connections to specific endpoints, you can specify individual nodes:
 
-```
+```text
 esdb://admin:changeit@node1.dns.name:2113,node2.dns.name:2113,node3.dns.name:2113
 ```
 
 Or for a single node:
 
-```
+```text
 esdb://admin:changeit@localhost:2113
 ```
 
@@ -92,6 +94,8 @@ When connecting to an insecure instance, specify `tls=false` parameter. For exam
 First, create a client and get it connected to the database.
 
 ```rs
+use trogon_eventstore::Client;
+
 let settings = "esdb://localhost:2113?tls=false&tlsVerifyCert=false".parse()?;
 let client = Client::new(settings)?;
 ```
