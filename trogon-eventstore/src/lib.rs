@@ -1,12 +1,12 @@
 //! Community-maintained Rust gRPC client for TrogonEventStore.
 //!
-//! [KurrentDB] is an open-source database built from the ground up for Event Sourcing, with Complex Event Processing in Javascript.
+//! TrogonEventStore is an open-source database built for event sourcing.
 //!
-//! ## KurrentDB Server Compatibility
+//! ## Server compatibility
 //! This client is compatible with version `20.6.1` upwards and works on Linux, MacOS and Windows.
 //!
 //!
-//! Server setup instructions can be found here [KurrentDB Docs], follow the docker setup for the simplest configuration.
+//! Server setup instructions are available in the [TrogonEventStore repository].
 //!
 //! # Example
 //!
@@ -23,14 +23,14 @@
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!
 //!     // Creates a client settings for a single node configuration.
-//!     let settings = "kurrentdb://admin:changeit@localhost:2113".parse()?;
+//!     let settings = "esdb://admin:changeit@localhost:2113".parse()?;
 //!     let client = Client::new(settings)?;
 //!
 //!     let payload = Foo {
 //!         is_rust_a_nice_language: true,
 //!     };
 //!
-//!     // It is not mandatory to use JSON as a data format however KurrentDB
+//!     // It is not mandatory to use JSON as a data format, but TrogonEventStore
 //!     // provides great additional value if you do so.
 //!     let evt = EventData::json("language-poll", &payload)?;
 //!
@@ -53,7 +53,7 @@
 //!     Ok(())
 //! }
 //! ```
-//! [KurrentDB]: https://eventstore.com/
+//! [TrogonEventStore repository]: https://github.com/TrogonStack/TrogonEventStore
 //! [eventstoredb docs]: https://developers.eventstore.com/server/20.6/server/installation/
 mod batch;
 mod client;

@@ -47,7 +47,7 @@ async fn test_tick_date_conversion(client: &Client) -> trogon_eventstore::Result
 
 // We read all stream events by batch.
 async fn test_read_all_stream_events(client: &Client) -> trogon_eventstore::Result<()> {
-    // kurrent should always have "some" events in $all, since kurrent itself uses streams, ouroboros style.
+    // The server should always have some events in $all because it uses streams internally.
     let result = client.read_all(&Default::default()).await?.next().await?;
 
     assert!(result.is_some());

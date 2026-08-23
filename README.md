@@ -6,15 +6,15 @@
 
 [Documentation](docs)
 
-Community-maintained Rust gRPC client for TrogonEventStore, derived from the KurrentDB Rust client.
+Community-maintained Rust gRPC client for TrogonEventStore.
 
-[KurrentDB] is the event-native database, where business events are immutably stored and streamed. Designed for event-sourced, event-driven, and microservices architectures.
+TrogonEventStore is an event-native database where business events are immutably stored and streamed.
 
-## KurrentDB Server Compatibility
+## Server compatibility
 This client is compatible with version `20.6.1` upwards and works on Linux, MacOS and Windows.
 
 
-Server setup instructions can be found here [KurrentDB Docs], follow the docker setup for the simplest configuration.
+Server setup instructions are available in the [TrogonEventStore repository].
 
 ## Installation
 
@@ -40,14 +40,14 @@ struct Foo {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Creates a client settings for a single node configuration.
-    let settings = "kurrentdb://admin:changeit@localhost:2113".parse()?;
+    let settings = "esdb://admin:changeit@localhost:2113".parse()?;
     let client = Client::new(settings)?;
 
     let payload = Foo {
         is_rust_a_nice_language: true,
     };
 
-    // It is not mandatory to use JSON as a data format however KurrentDB
+    // It is not mandatory to use JSON as a data format, but TrogonEventStore
     // provides great additional value if you do so.
     let evt = EventData::json("language-poll", &payload)?;
 
@@ -73,11 +73,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Support
 
-Information on support can be found here: [KurrentDB Support]
+Use [GitHub Discussions] for support questions.
 
 ## Documentation
 
-Documentation for KurrentDB can be found here: [KurrentDB Docs]
+Project documentation is maintained in this repository.
 
 Bear in mind that this client is not yet properly documented. We are working hard on a new version of the documentation.
 
@@ -87,11 +87,7 @@ TrogonEventStore Rust Client is licensed under the Apache License 2.0. It is der
 
 ## Communities
 
-- [Discuss](https://discuss.kurrent.io/)
-- [Discord (Kurrent)](https://discord.gg/Phn9pmCw3t)
+- [GitHub Discussions]
 
-[KurrentDB]: https://kurrent.io/
-[KurrentDB rust gRPC]: https://developers.kurrent.io/clients/grpc/getting-started?codeLanguage=Rust
-[KurrentDB Docs]: https://developers.kurrent.io/latest.html
-[kurrent discuss]: https://discuss.kurrent.io/
-[KurrentDB Support]: https://kurrent.io/support/
+[GitHub Discussions]: https://github.com/TrogonStack/TrogonEventStore-Client-Rust/discussions
+[TrogonEventStore repository]: https://github.com/TrogonStack/TrogonEventStore
