@@ -5,6 +5,7 @@ members = [
     "trogon-eventstore-extras",
 
     # internals
-    "trogon-eventstore-macros",
-    "examples"
+    "trogon-eventstore-macros"
 ]
+# Keep examples outside the release graph until https://github.com/googleapis/release-please/pull/2856 lands.
+exclude = ["examples"]
