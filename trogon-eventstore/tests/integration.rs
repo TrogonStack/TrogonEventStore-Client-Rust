@@ -57,7 +57,7 @@ async fn wait_node_is_alive(
             match tokio::time::timeout(
                 std::time::Duration::from_secs(1),
                 client
-                    .get(format!("{}://localhost:{}/health/live", protocol, port))
+                    .get(format!("{}://localhost:{}/-/readiness", protocol, port))
                     .send(),
             )
             .await

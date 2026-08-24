@@ -1,6 +1,5 @@
 use crate::common::{fresh_stream_id, generate_events};
 use chrono::{Datelike, Utc};
-use futures::channel::oneshot;
 use std::collections::HashMap;
 use std::time::Duration;
 use tracing::{debug, warn};
@@ -265,9 +264,7 @@ async fn test_subscription(client: &Client) -> eyre::Result<()> {
         .subscribe_to_stream(stream_id.as_str(), &options)
         .await;
 
-    let (tx, recv) = oneshot::channel();
-
-    tokio::spawn(async move {
+    let subscription = tokio::spawn(async move {
         let mut count = 0usize;
         let max = 6usize;
 
@@ -280,20 +277,20 @@ async fn test_subscription(client: &Client) -> eyre::Result<()> {
             }
         }
 
-        tx.send(count).unwrap();
-        Ok(()) as trogon_eventstore::Result<()>
+        Ok(count) as trogon_eventstore::Result<usize>
     });
 
     let _ = client
         .append_to_stream(stream_id, &Default::default(), events_after)
         .await?;
 
-    match tokio::time::timeout(Duration::from_secs(60), recv).await {
+    match tokio::time::timeout(Duration::from_secs(60), subscription).await {
         Ok(test_count) => {
+            let test_count = test_count??;
             assert_eq!(
-                test_count?, 6,
+                test_count, 6,
                 "We are testing proper state after catchup subscription: got {} expected {}.",
-                test_count?, 6
+                test_count, 6
             );
         }
 
@@ -328,25 +325,20 @@ async fn test_subscription_caughtup(client: &Client) -> trogon_eventstore::Resul
         .subscribe_to_stream(stream_id.clone(), &options)
         .await;
 
-    let (tx, recv) = oneshot::channel();
-
-    tokio::spawn(async move {
+    let caught_up = tokio::time::timeout(Duration::from_secs(60), async move {
         loop {
-            if let SubscriptionEvent::CaughtUp(_) = sub.next_subscription_event().await? {
-                break;
+            if let SubscriptionEvent::CaughtUp(caught_up) = sub.next_subscription_event().await? {
+                return Ok::<_, trogon_eventstore::Error>(caught_up);
             }
         }
+    })
+    .await
+    .expect("test_subscription_caughtup timed out")?
+    .expect("server did not provide caught-up context");
 
-        let _ = tx.send(());
-        Ok(()) as trogon_eventstore::Result<()>
-    });
-
-    if tokio::time::timeout(Duration::from_secs(60), recv)
-        .await
-        .is_err()
-    {
-        panic!("test_subscription_caughtup timed out!");
-    }
+    assert!(caught_up.timestamp <= Utc::now());
+    assert_eq!(caught_up.stream_revision, Some(9));
+    assert_eq!(caught_up.position, None);
 
     Ok(())
 }

@@ -6,10 +6,10 @@ use testcontainers::{
     core::{ContainerPort, Mount, WaitFor},
 };
 
-const DEFAULT_REGISTRY: &str = "docker.io";
-const DEFAULT_REPO: &str = "eventstore";
-const DEFAULT_CONTAINER: &str = "eventstore";
-const DEFAULT_TAG: &str = "latest";
+const DEFAULT_REGISTRY: &str = "ghcr.io";
+const DEFAULT_REPO: &str = "trogonstack";
+const DEFAULT_CONTAINER: &str = "trogoneventstore";
+const DEFAULT_TAG: &str = "ci";
 
 #[derive(Debug, Clone)]
 pub struct EventStoreDB {
@@ -23,10 +23,6 @@ impl EventStoreDB {
     pub fn insecure_mode(mut self) -> Self {
         self.env_vars
             .insert("EVENTSTORE_INSECURE".to_string(), "true".to_string());
-        self.env_vars.insert(
-            "EVENTSTORE_ENABLE_ATOM_PUB_OVER_HTTP".to_string(),
-            "true".to_string(),
-        );
 
         self
     }
@@ -163,16 +159,10 @@ impl Default for EventStoreDB {
         let tag = option_env!("ESDB_DOCKER_CONTAINER_VERSION").unwrap_or(DEFAULT_TAG);
         let repo = option_env!("ESDB_DOCKER_REPO").unwrap_or(DEFAULT_REPO);
         let container = option_env!("ESDB_DOCKER_CONTAINER").unwrap_or(DEFAULT_CONTAINER);
-        let mut env_vars = HashMap::new();
-
-        env_vars.insert(
-            "EVENTSTORE_GOSSIP_ON_SINGLE_NODE".to_string(),
-            "true".to_string(),
-        );
         EventStoreDB {
             name: format!("{}/{}/{}", registry, repo, container),
             tag: tag.to_string(),
-            env_vars,
+            env_vars: HashMap::new(),
             mounts: vec![],
         }
     }

@@ -841,7 +841,7 @@ impl Subscription {
 
                                 streams::read_resp::Content::CaughtUp(args) => {
                                     let args = args.timestamp.map(|t| crate::CaughtUp {
-                                        date: timestamp_to_datetime(t),
+                                        timestamp: timestamp_to_datetime(t),
                                         stream_revision: args.stream_revision.map(|x| x as u64),
                                         position: args.position.map(|x| Position {
                                             commit: x.commit_position,
@@ -854,7 +854,7 @@ impl Subscription {
 
                                 streams::read_resp::Content::FellBehind(args) => {
                                     let args = args.timestamp.map(|t| crate::FellBehind {
-                                        date: timestamp_to_datetime(t),
+                                        timestamp: timestamp_to_datetime(t),
                                         stream_revision: args.stream_revision.map(|x| x as u64),
                                         position: args.position.map(|x| Position {
                                             commit: x.commit_position,

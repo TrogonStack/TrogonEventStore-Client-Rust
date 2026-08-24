@@ -1127,14 +1127,14 @@ pub enum SubscriptionEvent {
 
 #[derive(Debug)]
 pub struct CaughtUp {
-    pub date: DateTime<Utc>,
+    pub timestamp: DateTime<Utc>,
     pub stream_revision: Option<u64>,
     pub position: Option<Position>,
 }
 
 #[derive(Debug)]
 pub struct FellBehind {
-    pub date: DateTime<Utc>,
+    pub timestamp: DateTime<Utc>,
     pub stream_revision: Option<u64>,
     pub position: Option<Position>,
 }

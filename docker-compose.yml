@@ -24,7 +24,7 @@ services:
       - volumes-provisioner
 
   esdb-node1: &template
-    image: ${ESDB_DOCKER_REGISTRY:-docker.io}/${ESDB_DOCKER_REPO:-eventstore}/${ESDB_DOCKER_CONTAINER:-eventstore}:${ESDB_DOCKER_CONTAINER_VERSION:-latest}
+    image: ${ESDB_DOCKER_REGISTRY:-ghcr.io}/${ESDB_DOCKER_REPO:-trogonstack}/${ESDB_DOCKER_CONTAINER:-trogoneventstore}:${ESDB_DOCKER_CONTAINER_VERSION:-ci}
     env_file:
       - vars.env
     environment:
