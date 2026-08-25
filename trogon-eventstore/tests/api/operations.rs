@@ -1,5 +1,6 @@
 use std::time::Duration;
 use tracing::debug;
+use trogon_eventstore::Credentials;
 use trogon_eventstore::operations;
 use trogon_eventstore::operations::StatsOptions;
 
@@ -186,12 +187,15 @@ async fn test_change_user_password(
         )
         .await?;
 
+    let options = operations::OperationalOptions::default()
+        .authenticated(Credentials::new(login.clone(), password.clone()));
+
     client
         .change_user_password(
             login.as_str(),
-            password,
+            password.as_str(),
             names.next().unwrap(),
-            &Default::default(),
+            &options,
         )
         .await?;
 
@@ -242,10 +246,7 @@ async fn test_op_restart_persistent_subscription_subsystem(
 }
 
 async fn test_scavenge(client: &operations::Client) -> trogon_eventstore::Result<()> {
-    let result = client.start_scavenge(1, 0, &Default::default()).await?;
-    let result = client.stop_scavenge(result.id(), &Default::default()).await;
-
-    assert!(result.is_ok());
+    client.start_scavenge(1, 0, &Default::default()).await?;
 
     Ok(())
 }

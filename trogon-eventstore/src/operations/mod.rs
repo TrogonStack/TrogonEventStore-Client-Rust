@@ -73,12 +73,9 @@ impl Client {
     pub async fn read_gossip(&self) -> crate::Result<Vec<gossip::MemberInfo>> {
         let handle = self.inner.current_selected_node().await?;
 
-        // We currently use the http endpoint instead of the gRPC one because at that time
-        // 04-25-2022, the public gRPC endpoint doesn't return all the gossip info like current
-        // epoch and other checkpoints.
-        gossip::http_read(self.inner.connection_settings(), handle)
+        gossip::read(self.inner.connection_settings(), &handle.client, handle.uri)
             .await
-            .map_err(|e| crate::Error::IllegalStateError(e.to_string()))
+            .map_err(crate::Error::from_grpc)
     }
 
     pub async fn stats(&self, options: &StatsOptions) -> crate::Result<Stats> {

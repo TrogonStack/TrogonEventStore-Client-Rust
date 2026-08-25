@@ -1,9 +1,8 @@
+use crate::ClientSettings;
 use crate::event_store::client::gossip as wire;
 use crate::grpc::HyperClient;
-use crate::http::http_configure_auth;
 use crate::request::build_request_metadata;
 use crate::types::Endpoint;
-use crate::{ClientSettings, grpc};
 use serde::{Deserialize, Serialize};
 use tonic::{Request, Status};
 use uuid::Uuid;
@@ -71,57 +70,6 @@ pub async fn read(
     Ok(members)
 }
 
-pub(crate) async fn http_read(
-    setts: &ClientSettings,
-    handle: grpc::Handle,
-) -> Result<Vec<MemberInfo>, Box<dyn std::error::Error>> {
-    let client = reqwest::Client::builder()
-        .danger_accept_invalid_certs(!setts.tls_verify_cert)
-        .build()?;
-
-    let default_auth = setts
-        .default_user_name
-        .as_ref()
-        .map(|c| crate::Authentication::Basic(c.clone()));
-
-    let resp = http_configure_auth(
-        client.get(format!("{}/gossip", handle.url())),
-        default_auth.as_ref(),
-    )
-    .send()
-    .await?;
-
-    let gossip = resp.json::<Gossip>().await?;
-
-    Ok(gossip
-        .members
-        .into_iter()
-        .map(|i| MemberInfo {
-            instance_id: i.instance_id,
-            time_stamp: i.time_stamp.timestamp(),
-            state: i.state,
-            is_alive: i.is_alive,
-            http_end_point: Endpoint {
-                host: i.external_http_ip,
-                port: i.external_http_port as u32,
-            },
-            last_commit_position: i.last_commit_position,
-            writer_checkpoint: i.writer_checkpoint,
-            chaser_checkpoint: i.chaser_checkpoint,
-            epoch_position: i.epoch_position,
-            epoch_number: i.epoch_number,
-            epoch_id: i.epoch_id,
-            node_priority: i.node_priority,
-        })
-        .collect())
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct Gossip {
-    members: Vec<HttpMemberInfo>,
-}
-
 #[derive(Debug, Clone)]
 pub struct MemberInfo {
     pub instance_id: Uuid,
@@ -129,31 +77,6 @@ pub struct MemberInfo {
     pub state: VNodeState,
     pub is_alive: bool,
     pub http_end_point: Endpoint,
-    pub last_commit_position: i64,
-    pub writer_checkpoint: i64,
-    pub chaser_checkpoint: i64,
-    pub epoch_position: i64,
-    pub epoch_number: i64,
-    pub epoch_id: Uuid,
-    pub node_priority: i64,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct HttpMemberInfo {
-    pub instance_id: Uuid,
-    pub time_stamp: chrono::DateTime<chrono::Utc>,
-    pub state: VNodeState,
-    pub is_alive: bool,
-    pub internal_tcp_ip: String,
-    pub internal_tcp_port: u16,
-    pub internal_secure_tcp_port: u16,
-    pub external_tcp_ip: String,
-    pub external_secure_tcp_port: u16,
-    #[serde(rename = "httpEndPointIp")]
-    pub external_http_ip: String,
-    #[serde(rename = "httpEndPointPort")]
-    pub external_http_port: u16,
     pub last_commit_position: i64,
     pub writer_checkpoint: i64,
     pub chaser_checkpoint: i64,

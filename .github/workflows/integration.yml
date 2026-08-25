@@ -7,22 +7,22 @@ on:
         description: Server image registry
         required: true
         type: string
-        default: docker.io
+        default: ghcr.io
       server_repository:
         description: Server image repository
         required: true
         type: string
-        default: eventstore
+        default: trogonstack
       server_container:
         description: Server image name
         required: true
         type: string
-        default: eventstore
+        default: trogoneventstore
       server_version:
         description: Server image tag
         required: true
         type: string
-        default: latest
+        default: ci
 
 permissions:
   contents: read
