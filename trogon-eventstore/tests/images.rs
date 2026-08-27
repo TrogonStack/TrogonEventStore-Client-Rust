@@ -72,8 +72,10 @@ impl EventStoreDB {
     }
 
     pub fn attach_volume_to_db_directory(mut self, volume: String) -> Self {
-        self.mounts
-            .push(Mount::bind_mount(volume, "/var/lib/eventstore".to_string()));
+        self.mounts.push(Mount::volume_mount(
+            volume,
+            "/var/lib/eventstore".to_string(),
+        ));
 
         self
     }

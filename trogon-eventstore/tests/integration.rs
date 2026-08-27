@@ -1,16 +1,16 @@
 mod api;
 mod common;
+mod fixtures;
 mod images;
 mod misc;
 mod plugins;
 
 use crate::common::{fresh_stream_id, generate_events};
-use futures::channel::oneshot;
 use std::time::Duration;
 use testcontainers::{ImageExt, core::ContainerPort, runners::AsyncRunner};
 use tracing::{debug, error};
 use tracing_subscriber::EnvFilter;
-use trogon_eventstore::{Client, ClientSettings};
+use trogon_eventstore::{Client, ClientSettings, Subscription, SubscriptionEvent};
 
 fn configure_logging() {
     tracing_subscriber::fmt::fmt()
@@ -23,19 +23,78 @@ fn configure_logging() {
         .init();
 }
 
-type VolumeName = String;
+struct TestVolume<C: FnMut(&str) = fn(&str)> {
+    name: String,
+    cleanup: C,
+}
 
-fn create_unique_volume() -> eyre::Result<VolumeName> {
-    let dir_name = uuid::Uuid::new_v4();
-    let dir_name = format!("dir-{}", dir_name);
+impl TestVolume {
+    fn create() -> eyre::Result<Self> {
+        let name = format!("dir-{}", uuid::Uuid::new_v4());
 
-    std::process::Command::new("docker")
+        let status = std::process::Command::new("docker")
+            .arg("volume")
+            .arg("create")
+            .arg(&name)
+            .status()?;
+
+        if !status.success() {
+            eyre::bail!("failed to create Docker volume {name}");
+        }
+
+        Ok(Self {
+            name,
+            cleanup: remove_test_volume,
+        })
+    }
+}
+
+impl<C: FnMut(&str)> TestVolume<C> {
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl<C: FnMut(&str)> Drop for TestVolume<C> {
+    fn drop(&mut self) {
+        (self.cleanup)(&self.name);
+    }
+}
+
+fn remove_test_volume(name: &str) {
+    match std::process::Command::new("docker")
         .arg("volume")
-        .arg("create")
-        .arg(format!("--name {}", dir_name))
-        .output()?;
+        .arg("rm")
+        .arg(name)
+        .status()
+    {
+        Ok(status) if status.success() => {}
+        Ok(status) => error!("Failed to remove Docker volume {name}: {status}"),
+        Err(err) => error!("Failed to remove Docker volume {name}: {err}"),
+    }
+}
 
-    Ok(dir_name)
+#[cfg(test)]
+mod test_volume_tests {
+    use super::TestVolume;
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn cleanup_runs_when_test_volume_is_dropped() {
+        let cleaned = Arc::new(Mutex::new(Vec::new()));
+
+        {
+            let cleaned = Arc::clone(&cleaned);
+            let volume = TestVolume {
+                name: "test-volume".to_string(),
+                cleanup: move |name: &str| cleaned.lock().unwrap().push(name.to_string()),
+            };
+
+            assert_eq!(volume.name(), "test-volume");
+        }
+
+        assert_eq!(*cleaned.lock().unwrap(), ["test-volume"]);
+    }
 }
 
 async fn wait_node_is_alive(
@@ -99,6 +158,32 @@ async fn wait_node_is_alive(
             Ok(())
         }
     }
+}
+
+async fn wait_for_subscription_confirmation(
+    subscription: &mut Subscription,
+) -> trogon_eventstore::Result<()> {
+    loop {
+        if let SubscriptionEvent::Confirmed(_) = subscription.next_subscription_event().await? {
+            return Ok(());
+        }
+    }
+}
+
+async fn assert_subscription_batch(
+    subscription: &mut Subscription,
+    event_type: &str,
+    revisions: std::ops::Range<u64>,
+) -> trogon_eventstore::Result<()> {
+    for revision in revisions {
+        let event = subscription.next().await?;
+        let event = event.get_original_event();
+
+        assert_eq!(event.event_type, event_type);
+        assert_eq!(event.revision, revision);
+    }
+
+    Ok(())
 }
 
 // This function assumes that we are using the admin credentials. It's possible during CI that
@@ -361,10 +446,10 @@ async fn single_node_discover_error() -> eyre::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn single_node_auto_resub_on_connection_drop() -> eyre::Result<()> {
-    let volume = create_unique_volume()?;
+    let volume = TestVolume::create()?;
     let image = images::EventStoreDB::default()
         .insecure_mode()
-        .attach_volume_to_db_directory(volume);
+        .attach_volume_to_db_directory(volume.name().to_owned());
 
     let container = image
         .clone()
@@ -385,33 +470,24 @@ async fn single_node_auto_resub_on_connection_drop() -> eyre::Result<()> {
     let mut stream = client
         .subscribe_to_stream(stream_name.as_str(), &options)
         .await;
-    let max = 6usize;
-    let (tx, recv) = oneshot::channel();
 
-    tokio::spawn(async move {
-        let mut count = 0usize;
+    tokio::time::timeout(
+        Duration::from_secs(60),
+        wait_for_subscription_confirmation(&mut stream),
+    )
+    .await??;
 
-        loop {
-            if let Err(e) = stream.next().await {
-                error!("Subscription exited with: {}", e);
-                break;
-            }
-
-            count += 1;
-
-            if count == max {
-                break;
-            }
-        }
-
-        tx.send(count).unwrap();
-    });
-
-    let events = generate_events("reconnect", 3);
+    let events = generate_events("reconnect-before", 3);
 
     let _ = client
         .append_to_stream(stream_name.as_str(), &Default::default(), events)
         .await?;
+
+    tokio::time::timeout(
+        Duration::from_secs(60),
+        assert_subscription_batch(&mut stream, "reconnect-before", 0..3),
+    )
+    .await??;
 
     container.stop().await?;
     debug!("Server is stopped, restarting...");
@@ -423,19 +499,17 @@ async fn single_node_auto_resub_on_connection_drop() -> eyre::Result<()> {
     wait_node_is_alive(&cloned_setts, 3_113).await?;
     debug!("Server is up again");
 
-    let events = generate_events("reconnect", 3);
+    let events = generate_events("reconnect-after", 3);
 
     let _ = client
         .append_to_stream(stream_name.as_str(), &Default::default(), events)
         .await?;
 
-    let test_count = tokio::time::timeout(std::time::Duration::from_secs(60), recv).await??;
-
-    assert_eq!(
-        test_count, 6,
-        "We are testing proper state after subscription upon reconnection: got {} expected {}.",
-        test_count, 6
-    );
+    tokio::time::timeout(
+        Duration::from_secs(60),
+        assert_subscription_batch(&mut stream, "reconnect-after", 3..6),
+    )
+    .await??;
 
     Ok(())
 }
