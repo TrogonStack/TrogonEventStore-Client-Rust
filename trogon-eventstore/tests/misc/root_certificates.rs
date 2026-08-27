@@ -19,7 +19,7 @@ async fn test_with_valid_root_certificate(port: u16) -> eyre::Result<()> {
 
 async fn test_with_invalid_certificate(port: u16) -> eyre::Result<()> {
     // invalid root certificate
-    let root_cert = "certs/node1/node.crt";
+    let root_cert = "certs/untrusted-ca/ca.crt";
 
     let setts = format!(
         "esdb://admin:changeit@localhost:{}?tlsVerifyCert=true&tls=true&tlsCaFile={}",
