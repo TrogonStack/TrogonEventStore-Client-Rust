@@ -1,7 +1,31 @@
 use crate::options::CommonOperationOptions;
 use crate::{Authentication, ClientSettings, Credentials, NodePreference};
 use base64::Engine;
+use opentelemetry::Context;
+use opentelemetry::global;
+use opentelemetry::propagation::Injector;
 use std::borrow::Cow;
+use tonic::metadata::{Ascii, MetadataKey, MetadataMap, MetadataValue};
+
+struct MetadataInjector<'a>(&'a mut MetadataMap);
+
+impl Injector for MetadataInjector<'_> {
+    fn set(&mut self, key: &str, value: String) {
+        let Ok(key) = MetadataKey::<Ascii>::from_bytes(key.as_bytes()) else {
+            tracing::warn!(key, "propagator produced an invalid gRPC metadata key");
+            return;
+        };
+        let Ok(value) = MetadataValue::<Ascii>::try_from(value.as_str()) else {
+            tracing::warn!(
+                key = key.as_str(),
+                "propagator produced an invalid gRPC metadata value"
+            );
+            return;
+        };
+
+        self.0.insert(key, value);
+    }
+}
 
 pub(crate) fn build_request_metadata(
     settings: &ClientSettings,
@@ -9,9 +33,10 @@ pub(crate) fn build_request_metadata(
 ) -> tonic::metadata::MetadataMap
 where
 {
-    use tonic::metadata::MetadataValue;
-
     let mut metadata = tonic::metadata::MetadataMap::new();
+    global::get_text_map_propagator(|propagator| {
+        propagator.inject_context(&Context::current(), &mut MetadataInjector(&mut metadata));
+    });
     let authentication: Option<Cow<'_, Authentication>> = options
         .authentication
         .as_ref()
@@ -79,7 +104,12 @@ fn build_authorization_header(
 mod auth_tests {
     use super::*;
     use crate::AppendToStreamOptions;
+    use crate::observability::{client_operation, operation};
     use crate::options::Options;
+    use opentelemetry::global;
+    use opentelemetry::trace::noop::{NoopTextMapPropagator, NoopTracerProvider};
+    use opentelemetry_sdk::propagation::TraceContextPropagator;
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
 
     fn settings_from(connection_string: &str) -> ClientSettings {
         connection_string
@@ -152,6 +182,45 @@ mod auth_tests {
             metadata.get("authorization").unwrap().to_str().unwrap(),
             "Bearer call-token"
         );
+    }
+
+    #[tokio::test]
+    async fn build_request_metadata_injects_the_current_client_context() {
+        let _guard = crate::observability::TEST_GLOBALS.lock().await;
+        let exporter = InMemorySpanExporter::default();
+        let provider = SdkTracerProvider::builder()
+            .with_simple_exporter(exporter.clone())
+            .build();
+        global::set_tracer_provider(provider.clone());
+        global::set_text_map_propagator(TraceContextPropagator::new());
+        let settings = settings_from("esdb://localhost:2113?tls=false");
+        let options = AppendToStreamOptions::default();
+
+        let metadata = client_operation(operation::APPEND_TO_STREAM, async {
+            Ok(build_request_metadata(
+                &settings,
+                options.common_operation_options(),
+            ))
+        })
+        .await
+        .unwrap();
+        provider.force_flush().unwrap();
+        let spans = exporter.get_finished_spans().unwrap();
+        let span = spans
+            .iter()
+            .find(|span| span.name == operation::APPEND_TO_STREAM.span_name())
+            .expect("client span");
+
+        assert_eq!(
+            metadata.get("traceparent").unwrap().to_str().unwrap(),
+            format!(
+                "00-{}-{}-01",
+                span.span_context.trace_id(),
+                span.span_context.span_id()
+            )
+        );
+        global::set_tracer_provider(NoopTracerProvider::new());
+        global::set_text_map_propagator(NoopTextMapPropagator::new());
     }
 
     #[test]

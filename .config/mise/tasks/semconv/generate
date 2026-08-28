@@ -1,0 +1,28 @@
+#!/bin/sh
+#MISE description="Generate the OpenTelemetry semantic convention contract"
+
+set -eu
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/../../../.." && pwd)
+output=${1:-"$root/trogon-eventstore/src/observability"}
+registry_version=$(sed -n '1p' "$root/otel/semconv/registry-version")
+registry="$root/otel/semconv/registry"
+official_registry="https://github.com/open-telemetry/semantic-conventions@${registry_version}[model]"
+staging=$(mktemp -d)
+trap 'rm -rf "$staging"' EXIT HUP INT TERM
+
+grep -Fqx "    registry_path: $official_registry" "$registry/manifest.yaml"
+
+weaver registry check \
+	--future \
+	--registry "$registry"
+
+weaver registry generate rust "$staging" \
+	--future \
+	--registry "$registry" \
+	--templates "$root/otel/semconv/templates"
+
+test -f "$staging/observability.rs"
+rustfmt --edition 2024 "$staging/observability.rs"
+mkdir -p "$output"
+mv "$staging/observability.rs" "$output/generated.rs"

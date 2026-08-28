@@ -1,0 +1,302 @@
+groups:
+  - id: registry.trogon.eventstore.client.attributes
+    type: attribute_group
+    brief: TrogonEventStore client attributes.
+    attributes:
+      - id: trogon.eventstore.batch.correlation_id
+        type: string
+        stability: development
+        brief: The identifier used to correlate a batch append request with its response.
+        examples: ["00000000-0000-0000-0000-000000000000"]
+
+  - id: span.trogon.eventstore.client
+    type: span
+    extends: span.db.client
+    span_kind: client
+    stability: development
+    brief: A logical TrogonEventStore client operation.
+    attributes:
+      - ref: db.system.name
+        requirement_level: required
+        note: The value MUST be `trogoneventstore` and SHOULD be set when the span is created.
+      - ref: db.operation.name
+        requirement_level: required
+      - ref: db.collection.name
+        requirement_level:
+          conditionally_required: If the operation targets a single stream.
+      - ref: error.type
+        requirement_level:
+          conditionally_required: If and only if the operation failed.
+
+  - id: span.trogon.eventstore.client.append_to_stream
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Appends events to a stream.
+    annotations:
+      code_generation:
+        operation_name: append_to_stream
+
+  - id: span.trogon.eventstore.client.set_stream_metadata
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Sets metadata for a stream.
+    annotations:
+      code_generation:
+        operation_name: set_stream_metadata
+
+  - id: span.trogon.eventstore.client.batch_append
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Starts a batch append session.
+    annotations:
+      code_generation:
+        operation_name: batch_append
+
+  - id: span.trogon.eventstore.client.batch_append_to_stream
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Appends a batch of events to a stream.
+    attributes:
+      - ref: trogon.eventstore.batch.correlation_id
+        requirement_level: required
+    annotations:
+      code_generation:
+        operation_name: batch_append_to_stream
+
+  - id: span.trogon.eventstore.client.read_stream
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Reads events from a stream.
+    annotations:
+      code_generation:
+        operation_name: read_stream
+
+  - id: span.trogon.eventstore.client.read_all
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Reads events from the all stream.
+    annotations:
+      code_generation:
+        operation_name: read_all
+
+  - id: span.trogon.eventstore.client.get_stream_metadata
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Reads metadata for a stream.
+    annotations:
+      code_generation:
+        operation_name: get_stream_metadata
+
+  - id: span.trogon.eventstore.client.delete_stream
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Soft deletes a stream.
+    annotations:
+      code_generation:
+        operation_name: delete_stream
+
+  - id: span.trogon.eventstore.client.tombstone_stream
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Permanently deletes a stream.
+    annotations:
+      code_generation:
+        operation_name: tombstone_stream
+
+  - id: span.trogon.eventstore.client.subscribe_to_stream
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Starts a volatile stream subscription.
+    annotations:
+      code_generation:
+        operation_name: subscribe_to_stream
+
+  - id: span.trogon.eventstore.client.subscribe_to_all
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Starts a volatile subscription to the all stream.
+    annotations:
+      code_generation:
+        operation_name: subscribe_to_all
+
+  - id: span.trogon.eventstore.client.create_persistent_subscription
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Creates a persistent subscription for a stream.
+    annotations:
+      code_generation:
+        operation_name: create_persistent_subscription
+
+  - id: span.trogon.eventstore.client.create_persistent_subscription_to_all
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Creates a persistent subscription for the all stream.
+    annotations:
+      code_generation:
+        operation_name: create_persistent_subscription_to_all
+
+  - id: span.trogon.eventstore.client.update_persistent_subscription
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Updates a persistent subscription for a stream.
+    annotations:
+      code_generation:
+        operation_name: update_persistent_subscription
+
+  - id: span.trogon.eventstore.client.update_persistent_subscription_to_all
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Updates a persistent subscription for the all stream.
+    annotations:
+      code_generation:
+        operation_name: update_persistent_subscription_to_all
+
+  - id: span.trogon.eventstore.client.delete_persistent_subscription
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Deletes a persistent subscription for a stream.
+    annotations:
+      code_generation:
+        operation_name: delete_persistent_subscription
+
+  - id: span.trogon.eventstore.client.delete_persistent_subscription_to_all
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Deletes a persistent subscription for the all stream.
+    annotations:
+      code_generation:
+        operation_name: delete_persistent_subscription_to_all
+
+  - id: span.trogon.eventstore.client.subscribe_to_persistent_subscription
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Connects to a persistent subscription for a stream.
+    annotations:
+      code_generation:
+        operation_name: subscribe_to_persistent_subscription
+
+  - id: span.trogon.eventstore.client.subscribe_to_persistent_subscription_to_all
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Connects to a persistent subscription for the all stream.
+    annotations:
+      code_generation:
+        operation_name: subscribe_to_persistent_subscription_to_all
+
+  - id: span.trogon.eventstore.client.replay_parked_messages
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Replays parked messages for a stream.
+    annotations:
+      code_generation:
+        operation_name: replay_parked_messages
+
+  - id: span.trogon.eventstore.client.replay_parked_messages_to_all
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Replays parked messages for the all stream.
+    annotations:
+      code_generation:
+        operation_name: replay_parked_messages_to_all
+
+  - id: span.trogon.eventstore.client.list_all_persistent_subscriptions
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Lists all persistent subscriptions.
+    annotations:
+      code_generation:
+        operation_name: list_all_persistent_subscriptions
+
+  - id: span.trogon.eventstore.client.list_persistent_subscriptions_for_stream
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Lists persistent subscriptions for a stream.
+    annotations:
+      code_generation:
+        operation_name: list_persistent_subscriptions_for_stream
+
+  - id: span.trogon.eventstore.client.list_persistent_subscriptions_to_all
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Lists persistent subscriptions for the all stream.
+    annotations:
+      code_generation:
+        operation_name: list_persistent_subscriptions_to_all
+
+  - id: span.trogon.eventstore.client.get_persistent_subscription_info
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Gets persistent subscription information for a stream.
+    annotations:
+      code_generation:
+        operation_name: get_persistent_subscription_info
+
+  - id: span.trogon.eventstore.client.get_persistent_subscription_info_to_all
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Gets persistent subscription information for the all stream.
+    annotations:
+      code_generation:
+        operation_name: get_persistent_subscription_info_to_all
+
+  - id: span.trogon.eventstore.client.restart_persistent_subscription_subsystem
+    type: span
+    extends: span.trogon.eventstore.client
+    span_kind: client
+    stability: development
+    brief: Restarts the persistent subscription subsystem.
+    annotations:
+      code_generation:
+        operation_name: restart_persistent_subscription_subsystem

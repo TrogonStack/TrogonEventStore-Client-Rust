@@ -1,0 +1,20 @@
+whitespace_control:
+  trim_blocks: true
+  lstrip_blocks: true
+
+templates:
+  - template: observability.rs.j2
+    filter: >
+      {
+        base: [semconv_grouped_spans[].spans[] | select(.id == "span.trogon.eventstore.client")][0],
+        operations: [semconv_grouped_spans[].spans[] | select(.id | startswith("span.trogon.eventstore.client."))],
+        attributes: [semconv_grouped_spans[].spans[].attributes[] | select(
+          .name == "db.collection.name" or
+          .name == "db.operation.name" or
+          .name == "db.system.name" or
+          .name == "error.type" or
+          .name == "trogon.eventstore.batch.correlation_id"
+        )] | unique_by(.name)
+      }
+    application_mode: single
+    file_name: observability.rs
