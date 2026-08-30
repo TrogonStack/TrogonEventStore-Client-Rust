@@ -41,9 +41,11 @@ use crate::{
 
 fn convert_event_data_to_batch_proposed_message(
     event: EventData,
+    context: &opentelemetry::Context,
 ) -> streams::batch_append_req::ProposedMessage {
     use streams::batch_append_req;
 
+    let event = crate::observability::inject_event_context(event, context);
     let id = event.id_opt.unwrap_or_else(uuid::Uuid::new_v4).into();
     let custom_metadata = event.custom_metadata.unwrap_or_default();
 
@@ -148,6 +150,7 @@ pub async fn append_to_stream(
     use streams::AppendReq;
     use streams::append_req::{self, Content};
 
+    let context = opentelemetry::Context::current();
     let stream_identifier = Some(StreamIdentifier {
         stream_name: stream.into_stream_name(),
     });
@@ -163,7 +166,7 @@ pub async fn append_to_stream(
         yield header;
 
         for event in events {
-            yield event.into();
+            yield crate::observability::inject_event_context(event, &context).into();
         }
     };
 
@@ -233,10 +236,11 @@ pub async fn batch_append(
 
             let expected_stream_position = Some(expected_stream_position);
 
+            let context = &req.context;
             let proposed_messages: Vec<ProposedMessage> = req
                 .events
                 .into_iter()
-                .map(convert_event_data_to_batch_proposed_message)
+                .map(|event| convert_event_data_to_batch_proposed_message(event, context))
                 .collect();
 
             let deadline = common_operation_options
@@ -759,6 +763,7 @@ impl Subscription {
         use streams::read_req::options::stream_options::RevisionOption;
         use streams::read_req::options::{self, StreamOption};
 
+        let receive = crate::observability::SubscriptionReceive::start();
         loop {
             if let Some(mut stream) = self.stream.take() {
                 match stream.try_next().await {
@@ -806,6 +811,7 @@ impl Subscription {
                                         }
                                     }
 
+                                    receive.complete(None, &event);
                                     return Ok(SubscriptionEvent::EventAppeared(event));
                                 }
 
@@ -1321,6 +1327,7 @@ pub async fn subscribe_to_persistent_subscription<S: AsRef<str>>(
     use persistent::read_req::{self, Options, options::StreamOption};
 
     let handle = connection.current_selected_node().await?;
+    let group_name = group_name.as_ref().to_owned();
 
     if to_all && !handle.supports_feature(Features::PERSISTENT_SUBSCRIPITON_TO_ALL) {
         return Err(crate::Error::UnsupportedFeature);
@@ -1349,7 +1356,7 @@ pub async fn subscribe_to_persistent_subscription<S: AsRef<str>>(
 
     let req_options = Options {
         stream_option,
-        group_name: group_name.as_ref().to_string(),
+        group_name: group_name.clone(),
         buffer_size: options.buffer_size as i32,
         uuid_option: Some(uuid_option),
     };
@@ -1376,6 +1383,7 @@ pub async fn subscribe_to_persistent_subscription<S: AsRef<str>>(
             ack_sender: sender,
             channel_id,
             inner: resp.into_inner(),
+            group_name,
         }),
     }
 }
@@ -1385,10 +1393,12 @@ pub struct PersistentSubscription {
     ack_sender: mpsc::Sender<crate::event_store::client::persistent::ReadReq>,
     channel_id: uuid::Uuid,
     inner: tonic::Streaming<crate::event_store::client::persistent::ReadResp>,
+    group_name: String,
 }
 
 impl PersistentSubscription {
     pub async fn next_subscription_event(&mut self) -> crate::Result<PersistentSubscriptionEvent> {
+        let receive = crate::observability::SubscriptionReceive::start();
         match self.inner.try_next().await {
             Err(status) => {
                 if let Some("persistent-subscription-dropped") = status
@@ -1408,7 +1418,11 @@ impl PersistentSubscription {
             }
             Ok(resp) => {
                 if let Some(content) = resp.and_then(|r| r.content) {
-                    return Ok(content.into());
+                    let event = content.into();
+                    if let PersistentSubscriptionEvent::EventAppeared { event, .. } = &event {
+                        receive.complete(Some(&self.group_name), event);
+                    }
+                    return Ok(event);
                 }
 
                 unreachable!()

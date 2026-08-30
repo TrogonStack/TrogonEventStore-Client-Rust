@@ -3,6 +3,11 @@ groups:
     type: attribute_group
     brief: TrogonEventStore client attributes.
     attributes:
+      - id: trogon.eventstore.event.type
+        type: string
+        stability: development
+        brief: The type of event received by the client.
+        examples: [order-created]
       - id: trogon.eventstore.batch.correlation_id
         type: string
         stability: development
@@ -27,6 +32,28 @@ groups:
       - ref: error.type
         requirement_level:
           conditionally_required: If and only if the operation failed.
+
+  - id: span.trogon.eventstore.client.receive
+    type: span
+    span_kind: client
+    stability: development
+    brief: Receives an event delivered by a subscription.
+    attributes:
+      - ref: messaging.system
+        requirement_level: required
+      - ref: messaging.operation.name
+        requirement_level: required
+      - ref: messaging.operation.type
+        requirement_level: required
+      - ref: messaging.destination.name
+        requirement_level: required
+      - ref: messaging.message.id
+        requirement_level: recommended
+      - ref: messaging.consumer.group.name
+        requirement_level:
+          conditionally_required: If the event was delivered by a persistent subscription.
+      - ref: trogon.eventstore.event.type
+        requirement_level: recommended
 
   - id: span.trogon.eventstore.client.append_to_stream
     type: span

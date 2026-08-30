@@ -8,6 +8,7 @@ pub(crate) const {{ attribute.name | screaming_snake_case }}: &str = "{{ attribu
 {% endfor %}
 
 pub(crate) const CLIENT_SPAN_KIND: SpanKind = SpanKind::{{ ctx.base.span_kind | pascal_case }};
+pub(crate) const RECEIVE_SPAN_KIND: SpanKind = SpanKind::{{ ctx.receive.span_kind | pascal_case }};
 
 pub(crate) mod operation {
     use super::ClientOperation;

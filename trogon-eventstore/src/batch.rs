@@ -21,6 +21,7 @@ pub(crate) struct Req {
     pub(crate) stream_name: String,
     pub(crate) events: Vec<EventData>,
     pub(crate) expected_revision: StreamState,
+    pub(crate) context: Context,
 }
 
 impl Req {
@@ -30,6 +31,7 @@ impl Req {
             stream_name,
             events,
             expected_revision,
+            context: Context::current(),
         }
     }
 }
@@ -200,7 +202,7 @@ mod tests {
         DB_COLLECTION_NAME, DB_OPERATION_NAME, TROGON_EVENTSTORE_BATCH_CORRELATION_ID,
     };
     use opentelemetry::global;
-    use opentelemetry::trace::{Status, noop::NoopTracerProvider};
+    use opentelemetry::trace::{Status, TraceContextExt, noop::NoopTracerProvider};
     use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
 
     #[tokio::test]
@@ -223,6 +225,7 @@ mod tests {
             panic!("expected an inbound batch request");
         };
         let correlation_id = req.id.to_string();
+        let captured_span_id = req.context.span().span_context().span_id();
         sender
             .send(Ok(BatchWriteResult::new(
                 "stream".to_string(),
@@ -239,6 +242,7 @@ mod tests {
             .iter()
             .find(|span| span.name == "batch_append_to_stream stream")
             .expect("batch append client span");
+        assert_eq!(span.span_context.span_id(), captured_span_id);
         assert!(span.attributes.iter().any(|attribute| {
             attribute.key.as_str() == TROGON_EVENTSTORE_BATCH_CORRELATION_ID
                 && attribute.value.to_string() == correlation_id

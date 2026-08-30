@@ -7,10 +7,18 @@ pub(crate) const DB_COLLECTION_NAME: &str = "db.collection.name";
 pub(crate) const DB_OPERATION_NAME: &str = "db.operation.name";
 pub(crate) const DB_SYSTEM_NAME: &str = "db.system.name";
 pub(crate) const ERROR_TYPE: &str = "error.type";
+pub(crate) const MESSAGING_CONSUMER_GROUP_NAME: &str = "messaging.consumer.group.name";
+pub(crate) const MESSAGING_DESTINATION_NAME: &str = "messaging.destination.name";
+pub(crate) const MESSAGING_MESSAGE_ID: &str = "messaging.message.id";
+pub(crate) const MESSAGING_OPERATION_NAME: &str = "messaging.operation.name";
+pub(crate) const MESSAGING_OPERATION_TYPE: &str = "messaging.operation.type";
+pub(crate) const MESSAGING_SYSTEM: &str = "messaging.system";
 pub(crate) const TROGON_EVENTSTORE_BATCH_CORRELATION_ID: &str =
     "trogon.eventstore.batch.correlation_id";
+pub(crate) const TROGON_EVENTSTORE_EVENT_TYPE: &str = "trogon.eventstore.event.type";
 
 pub(crate) const CLIENT_SPAN_KIND: SpanKind = SpanKind::Client;
+pub(crate) const RECEIVE_SPAN_KIND: SpanKind = SpanKind::Client;
 
 pub(crate) mod operation {
     use super::ClientOperation;
