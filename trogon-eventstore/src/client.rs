@@ -1,5 +1,6 @@
 use crate::batch::BatchAppendClient;
 use crate::grpc::{ClientSettings, GrpcClient};
+use crate::observability::{client_operation, infallible_client_operation, operation};
 use crate::options::batch_append::BatchAppendOptions;
 use crate::options::persistent_subscription::PersistentSubscriptionOptions;
 use crate::options::read_all::ReadAllOptions;
@@ -78,7 +79,12 @@ impl Client {
     where
         Events: ToEvents,
     {
-        commands::append_to_stream(&self.client, stream_name, options, events.into_events()).await
+        let stream_name = stream_name.into_stream_name();
+        client_operation(
+            operation::APPEND_TO_STREAM.on_stream(&stream_name),
+            commands::append_to_stream(&self.client, stream_name, options, events.into_events()),
+        )
+        .await
     }
 
     // Sets a stream metadata.
@@ -88,11 +94,18 @@ impl Client {
         options: &AppendToStreamOptions,
         metadata: &StreamMetadata,
     ) -> crate::Result<WriteResult> {
-        let event = EventData::json("$metadata", metadata)
-            .map_err(|e| crate::Error::InternalParsingError(e.to_string()))?;
+        let stream_name = name.into_metadata_stream_name();
+        client_operation(
+            operation::SET_STREAM_METADATA.on_stream(&stream_name),
+            async {
+                let event = EventData::json("$metadata", metadata)
+                    .map_err(|e| crate::Error::InternalParsingError(e.to_string()))?;
 
-        self.append_to_stream(name.into_metadata_stream_name(), options, event)
-            .await
+                commands::append_to_stream(&self.client, stream_name, options, event.into_events())
+                    .await
+            },
+        )
+        .await
     }
 
     // Creates a batch-append client.
@@ -100,7 +113,11 @@ impl Client {
         &self,
         options: &BatchAppendOptions,
     ) -> crate::Result<BatchAppendClient> {
-        commands::batch_append(&self.client, options).await
+        client_operation(
+            operation::BATCH_APPEND,
+            commands::batch_append(&self.client, options),
+        )
+        .await
     }
 
     /// Reads events from a given stream. The reading can be done forward and
@@ -110,11 +127,15 @@ impl Client {
         stream_name: impl StreamName,
         options: &ReadStreamOptions,
     ) -> crate::Result<ReadStream> {
-        commands::read_stream(
-            self.client.clone(),
-            options,
-            stream_name,
-            options.max_count as u64,
+        let stream_name = stream_name.into_stream_name();
+        client_operation(
+            operation::READ_STREAM.on_stream(&stream_name),
+            commands::read_stream(
+                self.client.clone(),
+                options,
+                stream_name,
+                options.max_count as u64,
+            ),
         )
         .await
     }
@@ -122,7 +143,11 @@ impl Client {
     /// Reads events for the system stream `$all`. The reading can be done
     /// forward and backward.
     pub async fn read_all(&self, options: &ReadAllOptions) -> crate::Result<ReadStream> {
-        commands::read_all(self.client.clone(), options, options.max_count as u64).await
+        client_operation(
+            operation::READ_ALL.on_collection("$all"),
+            commands::read_all(self.client.clone(), options, options.max_count as u64),
+        )
+        .await
     }
 
     /// Reads a stream metadata.
@@ -131,32 +156,43 @@ impl Client {
         name: impl MetadataStreamName,
         options: &ReadStreamOptions,
     ) -> crate::Result<StreamMetadataResult> {
-        let mut stream = self
-            .read_stream(name.into_metadata_stream_name(), options)
-            .await?;
+        let stream_name = name.into_metadata_stream_name();
+        client_operation(
+            operation::GET_STREAM_METADATA.on_stream(&stream_name),
+            async {
+                let mut stream = commands::read_stream(
+                    self.client.clone(),
+                    options,
+                    stream_name,
+                    options.max_count as u64,
+                )
+                .await?;
 
-        match stream.next().await {
-            Ok(event) => {
-                let event = event.expect("to be defined");
-                let metadata = event
-                    .get_original_event()
-                    .as_json::<StreamMetadata>()
-                    .map_err(|e| crate::Error::InternalParsingError(e.to_string()))?;
+                match stream.next().await {
+                    Ok(event) => {
+                        let event = event.expect("to be defined");
+                        let metadata = event
+                            .get_original_event()
+                            .as_json::<StreamMetadata>()
+                            .map_err(|e| crate::Error::InternalParsingError(e.to_string()))?;
 
-                let metadata = VersionedMetadata {
-                    stream: event.get_original_stream_id().to_string(),
-                    version: event.get_original_event().revision,
-                    metadata,
-                };
+                        let metadata = VersionedMetadata {
+                            stream: event.get_original_stream_id().to_string(),
+                            version: event.get_original_event().revision,
+                            metadata,
+                        };
 
-                Ok(StreamMetadataResult::Success(Box::new(metadata)))
-            }
-            Err(e) => match e {
-                crate::Error::ResourceNotFound => Ok(StreamMetadataResult::NotFound),
-                crate::Error::ResourceDeleted => Ok(StreamMetadataResult::Deleted),
-                other => Err(other),
+                        Ok(StreamMetadataResult::Success(Box::new(metadata)))
+                    }
+                    Err(e) => match e {
+                        crate::Error::ResourceNotFound => Ok(StreamMetadataResult::NotFound),
+                        crate::Error::ResourceDeleted => Ok(StreamMetadataResult::Deleted),
+                        other => Err(other),
+                    },
+                }
             },
-        }
+        )
+        .await
     }
 
     /// Soft deletes a given stream.
@@ -170,7 +206,12 @@ impl Client {
         stream_name: impl StreamName,
         options: &DeleteStreamOptions,
     ) -> crate::Result<Option<Position>> {
-        commands::delete_stream(&self.client, stream_name, options).await
+        let stream_name = stream_name.into_stream_name();
+        client_operation(
+            operation::DELETE_STREAM.on_stream(&stream_name),
+            commands::delete_stream(&self.client, stream_name, options),
+        )
+        .await
     }
 
     /// Hard deletes a given stream.
@@ -183,7 +224,12 @@ impl Client {
         stream_name: impl StreamName,
         options: &TombstoneStreamOptions,
     ) -> crate::Result<Option<Position>> {
-        commands::tombstone_stream(&self.client, stream_name, options).await
+        let stream_name = stream_name.into_stream_name();
+        client_operation(
+            operation::TOMBSTONE_STREAM.on_stream(&stream_name),
+            commands::tombstone_stream(&self.client, stream_name, options),
+        )
+        .await
     }
 
     /// Subscribes to a given stream. This kind of subscription specifies a
@@ -205,14 +251,22 @@ impl Client {
         stream_name: impl StreamName,
         options: &SubscribeToStreamOptions,
     ) -> Subscription {
-        commands::subscribe_to_stream(self.client.clone(), stream_name, options)
+        let stream_name = stream_name.into_stream_name();
+        infallible_client_operation(
+            operation::SUBSCRIBE_TO_STREAM.on_stream(&stream_name),
+            async { commands::subscribe_to_stream(self.client.clone(), stream_name, options) },
+        )
+        .await
     }
 
     /// Like [`subscribe_to_stream`] but specific to system `$all` stream.
     ///
     /// [`subscribe_to_stream`]: #method.subscribe_to_stream
     pub async fn subscribe_to_all(&self, options: &SubscribeToAllOptions) -> Subscription {
-        commands::subscribe_to_all(self.client.clone(), options)
+        infallible_client_operation(operation::SUBSCRIBE_TO_ALL.on_collection("$all"), async {
+            commands::subscribe_to_all(self.client.clone(), options)
+        })
+        .await
     }
 
     /// Creates a persistent subscription group on a stream.
@@ -227,11 +281,15 @@ impl Client {
         group_name: impl AsRef<str>,
         options: &PersistentSubscriptionOptions,
     ) -> crate::Result<()> {
-        commands::create_persistent_subscription(
-            &self.client,
-            stream_name,
-            group_name.as_ref(),
-            options,
+        let stream_name = stream_name.into_stream_name();
+        client_operation(
+            operation::CREATE_PERSISTENT_SUBSCRIPTION.on_stream(&stream_name),
+            commands::create_persistent_subscription(
+                &self.client,
+                stream_name,
+                group_name.as_ref(),
+                options,
+            ),
         )
         .await
     }
@@ -242,8 +300,16 @@ impl Client {
         group_name: impl AsRef<str>,
         options: &PersistentSubscriptionToAllOptions,
     ) -> crate::Result<()> {
-        commands::create_persistent_subscription(&self.client, "", group_name.as_ref(), options)
-            .await
+        client_operation(
+            operation::CREATE_PERSISTENT_SUBSCRIPTION_TO_ALL.on_collection("$all"),
+            commands::create_persistent_subscription(
+                &self.client,
+                "",
+                group_name.as_ref(),
+                options,
+            ),
+        )
+        .await
     }
 
     /// Updates a persistent subscription group on a stream.
@@ -253,11 +319,15 @@ impl Client {
         group_name: impl AsRef<str>,
         options: &PersistentSubscriptionOptions,
     ) -> crate::Result<()> {
-        commands::update_persistent_subscription(
-            &self.client,
-            stream_name,
-            group_name.as_ref(),
-            options,
+        let stream_name = stream_name.into_stream_name();
+        client_operation(
+            operation::UPDATE_PERSISTENT_SUBSCRIPTION.on_stream(&stream_name),
+            commands::update_persistent_subscription(
+                &self.client,
+                stream_name,
+                group_name.as_ref(),
+                options,
+            ),
         )
         .await
     }
@@ -268,8 +338,16 @@ impl Client {
         group_name: impl AsRef<str>,
         options: &PersistentSubscriptionToAllOptions,
     ) -> crate::Result<()> {
-        commands::update_persistent_subscription(&self.client, "", group_name.as_ref(), options)
-            .await
+        client_operation(
+            operation::UPDATE_PERSISTENT_SUBSCRIPTION_TO_ALL.on_collection("$all"),
+            commands::update_persistent_subscription(
+                &self.client,
+                "",
+                group_name.as_ref(),
+                options,
+            ),
+        )
+        .await
     }
 
     /// Deletes a persistent subscription group on a stream.
@@ -279,12 +357,16 @@ impl Client {
         group_name: impl AsRef<str>,
         options: &DeletePersistentSubscriptionOptions,
     ) -> crate::Result<()> {
-        commands::delete_persistent_subscription(
-            &self.client,
-            stream_name,
-            group_name.as_ref(),
-            options,
-            false,
+        let stream_name = stream_name.into_stream_name();
+        client_operation(
+            operation::DELETE_PERSISTENT_SUBSCRIPTION.on_stream(&stream_name),
+            commands::delete_persistent_subscription(
+                &self.client,
+                stream_name,
+                group_name.as_ref(),
+                options,
+                false,
+            ),
         )
         .await
     }
@@ -295,12 +377,15 @@ impl Client {
         group_name: impl AsRef<str>,
         options: &DeletePersistentSubscriptionOptions,
     ) -> crate::Result<()> {
-        commands::delete_persistent_subscription(
-            &self.client,
-            "",
-            group_name.as_ref(),
-            options,
-            true,
+        client_operation(
+            operation::DELETE_PERSISTENT_SUBSCRIPTION_TO_ALL.on_collection("$all"),
+            commands::delete_persistent_subscription(
+                &self.client,
+                "",
+                group_name.as_ref(),
+                options,
+                true,
+            ),
         )
         .await
     }
@@ -312,12 +397,16 @@ impl Client {
         group_name: impl AsRef<str>,
         options: &SubscribeToPersistentSubscriptionOptions,
     ) -> crate::Result<PersistentSubscription> {
-        commands::subscribe_to_persistent_subscription(
-            &self.client,
-            stream_name,
-            group_name.as_ref(),
-            options,
-            false,
+        let stream_name = stream_name.into_stream_name();
+        client_operation(
+            operation::SUBSCRIBE_TO_PERSISTENT_SUBSCRIPTION.on_stream(&stream_name),
+            commands::subscribe_to_persistent_subscription(
+                &self.client,
+                stream_name,
+                group_name.as_ref(),
+                options,
+                false,
+            ),
         )
         .await
     }
@@ -328,12 +417,15 @@ impl Client {
         group_name: impl AsRef<str>,
         options: &SubscribeToPersistentSubscriptionOptions,
     ) -> crate::Result<PersistentSubscription> {
-        commands::subscribe_to_persistent_subscription(
-            &self.client,
-            "",
-            group_name.as_ref(),
-            options,
-            true,
+        client_operation(
+            operation::SUBSCRIBE_TO_PERSISTENT_SUBSCRIPTION_TO_ALL.on_collection("$all"),
+            commands::subscribe_to_persistent_subscription(
+                &self.client,
+                "",
+                group_name.as_ref(),
+                options,
+                true,
+            ),
         )
         .await
     }
@@ -345,12 +437,16 @@ impl Client {
         group_name: impl AsRef<str>,
         options: &ReplayParkedMessagesOptions,
     ) -> crate::Result<()> {
-        commands::replay_parked_messages(
-            &self.client,
-            &self.http_client,
-            commands::RegularStream(stream_name.as_ref().to_string()),
-            group_name,
-            options,
+        let stream_name = stream_name.as_ref().to_string();
+        client_operation(
+            operation::REPLAY_PARKED_MESSAGES.on_collection(stream_name.clone()),
+            commands::replay_parked_messages(
+                &self.client,
+                &self.http_client,
+                commands::RegularStream(stream_name),
+                group_name,
+                options,
+            ),
         )
         .await
     }
@@ -361,12 +457,15 @@ impl Client {
         group_name: impl AsRef<str>,
         options: &ReplayParkedMessagesOptions,
     ) -> crate::Result<()> {
-        commands::replay_parked_messages(
-            &self.client,
-            &self.http_client,
-            commands::AllStream,
-            group_name,
-            options,
+        client_operation(
+            operation::REPLAY_PARKED_MESSAGES_TO_ALL.on_collection("$all"),
+            commands::replay_parked_messages(
+                &self.client,
+                &self.http_client,
+                commands::AllStream,
+                group_name,
+                options,
+            ),
         )
         .await
     }
@@ -376,7 +475,11 @@ impl Client {
         &self,
         options: &ListPersistentSubscriptionsOptions,
     ) -> crate::Result<Vec<PersistentSubscriptionInfo<RevisionOrPosition>>> {
-        commands::list_all_persistent_subscriptions(&self.client, &self.http_client, options).await
+        client_operation(
+            operation::LIST_ALL_PERSISTENT_SUBSCRIPTIONS,
+            commands::list_all_persistent_subscriptions(&self.client, &self.http_client, options),
+        )
+        .await
     }
 
     /// List all persistent subscriptions of a specific stream.
@@ -385,11 +488,15 @@ impl Client {
         stream_name: impl AsRef<str>,
         options: &ListPersistentSubscriptionsOptions,
     ) -> crate::Result<Vec<PersistentSubscriptionInfo<u64>>> {
-        commands::list_persistent_subscriptions_for_stream(
-            &self.client,
-            &self.http_client,
-            commands::RegularStream(stream_name.as_ref().to_string()),
-            options,
+        let stream_name = stream_name.as_ref().to_string();
+        client_operation(
+            operation::LIST_PERSISTENT_SUBSCRIPTIONS_FOR_STREAM.on_collection(stream_name.clone()),
+            commands::list_persistent_subscriptions_for_stream(
+                &self.client,
+                &self.http_client,
+                commands::RegularStream(stream_name),
+                options,
+            ),
         )
         .await
     }
@@ -399,11 +506,14 @@ impl Client {
         &self,
         options: &ListPersistentSubscriptionsOptions,
     ) -> crate::Result<Vec<PersistentSubscriptionInfo<Position>>> {
-        commands::list_persistent_subscriptions_for_stream(
-            &self.client,
-            &self.http_client,
-            commands::AllStream,
-            options,
+        client_operation(
+            operation::LIST_PERSISTENT_SUBSCRIPTIONS_TO_ALL.on_collection("$all"),
+            commands::list_persistent_subscriptions_for_stream(
+                &self.client,
+                &self.http_client,
+                commands::AllStream,
+                options,
+            ),
         )
         .await
     }
@@ -415,12 +525,16 @@ impl Client {
         group_name: impl AsRef<str>,
         options: &GetPersistentSubscriptionInfoOptions,
     ) -> crate::Result<PersistentSubscriptionInfo<u64>> {
-        commands::get_persistent_subscription_info(
-            &self.client,
-            &self.http_client,
-            commands::RegularStream(stream_name.as_ref().to_string()),
-            group_name,
-            options,
+        let stream_name = stream_name.as_ref().to_string();
+        client_operation(
+            operation::GET_PERSISTENT_SUBSCRIPTION_INFO.on_collection(stream_name.clone()),
+            commands::get_persistent_subscription_info(
+                &self.client,
+                &self.http_client,
+                commands::RegularStream(stream_name),
+                group_name,
+                options,
+            ),
         )
         .await
     }
@@ -431,12 +545,15 @@ impl Client {
         group_name: impl AsRef<str>,
         options: &GetPersistentSubscriptionInfoOptions,
     ) -> crate::Result<PersistentSubscriptionInfo<Position>> {
-        commands::get_persistent_subscription_info(
-            &self.client,
-            &self.http_client,
-            commands::AllStream,
-            group_name,
-            options,
+        client_operation(
+            operation::GET_PERSISTENT_SUBSCRIPTION_INFO_TO_ALL.on_collection("$all"),
+            commands::get_persistent_subscription_info(
+                &self.client,
+                &self.http_client,
+                commands::AllStream,
+                group_name,
+                options,
+            ),
         )
         .await
     }
@@ -446,10 +563,13 @@ impl Client {
         &self,
         options: &RestartPersistentSubscriptionSubsystem,
     ) -> crate::Result<()> {
-        commands::restart_persistent_subscription_subsystem(
-            &self.client,
-            &self.http_client,
-            options,
+        client_operation(
+            operation::RESTART_PERSISTENT_SUBSCRIPTION_SUBSYSTEM,
+            commands::restart_persistent_subscription_subsystem(
+                &self.client,
+                &self.http_client,
+                options,
+            ),
         )
         .await
     }

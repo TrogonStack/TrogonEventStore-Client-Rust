@@ -61,6 +61,7 @@ mod commands;
 mod event_store;
 mod grpc;
 mod http;
+mod observability;
 pub mod operations;
 mod options;
 mod private;
