@@ -7,12 +7,23 @@ templates:
     filter: >
       {
         base: [semconv_grouped_spans[].spans[] | select(.id == "span.trogon.eventstore.client")][0],
-        operations: [semconv_grouped_spans[].spans[] | select(.id | startswith("span.trogon.eventstore.client."))],
+        receive: [semconv_grouped_spans[].spans[] | select(.id == "span.trogon.eventstore.client.receive")][0],
+        operations: [semconv_grouped_spans[].spans[] | select(
+          (.id | startswith("span.trogon.eventstore.client.")) and
+          .annotations.code_generation.operation_name != null
+        )],
         attributes: [semconv_grouped_spans[].spans[].attributes[] | select(
           .name == "db.collection.name" or
           .name == "db.operation.name" or
           .name == "db.system.name" or
           .name == "error.type" or
+          .name == "messaging.consumer.group.name" or
+          .name == "messaging.destination.name" or
+          .name == "messaging.message.id" or
+          .name == "messaging.operation.name" or
+          .name == "messaging.operation.type" or
+          .name == "messaging.system" or
+          .name == "trogon.eventstore.event.type" or
           .name == "trogon.eventstore.batch.correlation_id"
         )] | unique_by(.name)
       }
