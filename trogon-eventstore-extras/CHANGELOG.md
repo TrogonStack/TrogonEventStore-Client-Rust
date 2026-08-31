@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.0](https://github.com/TrogonStack/TrogonEventStore-Client-Rust/compare/trogon-eventstore-extras@v0.1.0...trogon-eventstore-extras@v0.2.0) (2026-08-31)
+
+
+### Miscellaneous Chores
+
+* **trogon-eventstore-extras:** Synchronize TrogonEventStore Rust Client versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * trogon-eventstore bumped from 0.1.0 to 0.2.0
+
 ## [0.1.0](https://github.com/TrogonStack/TrogonEventStore-Client-Rust/compare/trogon-eventstore-extras@v0.0.1...trogon-eventstore-extras@v0.1.0) (2026-08-23)
 
 
