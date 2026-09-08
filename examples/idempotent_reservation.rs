@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, error::Error};
+use std::{collections::HashMap, error::Error, fmt};
 use trogon_eventstore::{
     AppendToStreamOptions, Client, ClientSettings, CurrentRevision, Error as ClientError,
     EventData, ReadStreamOptions, StreamState, WriteResult,
@@ -38,7 +38,7 @@ struct InventoryCreated {
     available: u32,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct InventoryReserved {
     operation_id: OperationId,
     reservation_id: ReservationId,
@@ -47,7 +47,7 @@ struct InventoryReserved {
     quantity: u32,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct InventoryReleased {
     operation_id: OperationId,
     reservation_id: ReservationId,
@@ -55,62 +55,103 @@ struct InventoryReleased {
     quantity: u32,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ProcessedOperation {
+    Reserved {
+        event_revision: u64,
+        event: InventoryReserved,
+    },
+    Released {
+        event_revision: u64,
+        event: InventoryReleased,
+    },
+}
+
+impl ProcessedOperation {
+    fn event_revision(&self) -> u64 {
+        match self {
+            Self::Reserved { event_revision, .. } | Self::Released { event_revision, .. } => {
+                *event_revision
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 struct InventoryState {
     available: u32,
     reservations: HashMap<ReservationId, u32>,
+    // Folding this index from the inventory events keeps idempotency and inventory in one write.
+    processed_operations: HashMap<OperationId, ProcessedOperation>,
 }
 
 #[derive(Clone)]
-struct ReservationAttempt {
-    client_name: &'static str,
-    operation_id: OperationId,
-    reservation_id: ReservationId,
-    event: EventData,
-}
+struct ReserveCommand(InventoryReserved);
 
-impl ReservationAttempt {
-    fn new(client_name: &'static str, sku: &str) -> Result<Self, Box<dyn Error>> {
+impl ReserveCommand {
+    fn new(client_name: &str, sku: &str) -> Self {
         let operation_id = OperationId::new();
         let reservation_id = ReservationId::new();
-        let reservation = InventoryReserved {
+        Self(InventoryReserved {
             operation_id,
             reservation_id,
             client: client_name.to_owned(),
             sku: sku.to_owned(),
             quantity: 1,
-        };
-
-        Ok(Self {
-            client_name,
-            operation_id,
-            reservation_id,
-            event: EventData::json(INVENTORY_RESERVED_EVENT_TYPE, &reservation)?.id(operation_id.0),
         })
+    }
+
+    fn event(&self) -> Result<EventData, Box<dyn Error>> {
+        Ok(EventData::json(INVENTORY_RESERVED_EVENT_TYPE, &self.0)?.id(self.0.operation_id.0))
     }
 }
 
 #[derive(Clone)]
-struct ReleaseAttempt {
-    operation_id: OperationId,
-    event: EventData,
-}
+struct ReleaseCommand(InventoryReleased);
 
-impl ReleaseAttempt {
-    fn new(sku: &str, reservation_id: ReservationId) -> Result<Self, Box<dyn Error>> {
+impl ReleaseCommand {
+    fn new(sku: &str, reservation_id: ReservationId) -> Self {
         let operation_id = OperationId::new();
-        let release = InventoryReleased {
+        Self(InventoryReleased {
             operation_id,
             reservation_id,
             sku: sku.to_owned(),
             quantity: 1,
-        };
-
-        Ok(Self {
-            operation_id,
-            event: EventData::json(INVENTORY_RELEASED_EVENT_TYPE, &release)?.id(operation_id.0),
         })
     }
+
+    fn event(&self) -> Result<EventData, Box<dyn Error>> {
+        Ok(EventData::json(INVENTORY_RELEASED_EVENT_TYPE, &self.0)?.id(self.0.operation_id.0))
+    }
+}
+
+#[derive(Debug)]
+struct OperationIdConflict(OperationId);
+
+impl fmt::Display for OperationIdConflict {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "operation ID {:?} was reused with different content", self.0)
+    }
+}
+
+impl Error for OperationIdConflict {}
+
+#[derive(Debug)]
+struct InvalidInventoryCommand(&'static str);
+
+impl fmt::Display for InvalidInventoryCommand {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.0)
+    }
+}
+
+impl Error for InvalidInventoryCommand {}
+
+#[derive(Debug)]
+struct CommandResult {
+    outcome: ProcessedOperation,
+    appended: bool,
+    write: Option<WriteResult>,
 }
 
 async fn read_inventory(
@@ -123,6 +164,7 @@ async fn read_inventory(
     let mut state = InventoryState {
         available: 0,
         reservations: HashMap::new(),
+        processed_operations: HashMap::new(),
     };
     let mut revision = None;
 
@@ -146,6 +188,19 @@ async fn read_inventory(
                         .insert(reserved.reservation_id, reserved.quantity)
                         .is_none()
                 );
+                let operation_id = reserved.operation_id;
+                assert!(
+                    state
+                        .processed_operations
+                        .insert(
+                            operation_id,
+                            ProcessedOperation::Reserved {
+                                event_revision: event.revision,
+                                event: reserved,
+                            },
+                        )
+                        .is_none()
+                );
             }
             INVENTORY_RELEASED_EVENT_TYPE => {
                 let released = event.as_json::<InventoryReleased>()?;
@@ -156,6 +211,19 @@ async fn read_inventory(
                     .expect("the released reservation to be active");
                 assert_eq!(quantity, released.quantity);
                 state.available += released.quantity;
+                let operation_id = released.operation_id;
+                assert!(
+                    state
+                        .processed_operations
+                        .insert(
+                            operation_id,
+                            ProcessedOperation::Released {
+                                event_revision: event.revision,
+                                event: released,
+                            },
+                        )
+                        .is_none()
+                );
             }
             event_type => panic!("unexpected inventory event type: {event_type}"),
         }
@@ -183,6 +251,90 @@ async fn append_at(
     let options =
         AppendToStreamOptions::default().stream_state(StreamState::StreamRevision(revision));
     client.append_to_stream(stream, &options, event).await
+}
+
+async fn reserve(
+    client: &Client,
+    stream: &str,
+    command: &ReserveCommand,
+) -> Result<CommandResult, Box<dyn Error>> {
+    let (state, revision) = read_inventory(client, stream).await?;
+
+    if let Some(previous) = state
+        .processed_operations
+        .get(&command.0.operation_id)
+    {
+        return match previous {
+            ProcessedOperation::Reserved { event, .. } if event == &command.0 => {
+                Ok(CommandResult {
+                    outcome: previous.clone(),
+                    appended: false,
+                    write: None,
+                })
+            }
+            _ => Err(Box::new(OperationIdConflict(command.0.operation_id))),
+        };
+    }
+
+    if state.available < command.0.quantity {
+        return Err(Box::new(InvalidInventoryCommand(
+            "the requested inventory is not available",
+        )));
+    }
+
+    let write = append_at(client, stream, revision, command.event()?).await?;
+    let outcome = ProcessedOperation::Reserved {
+        event_revision: write.next_expected_version,
+        event: command.0.clone(),
+    };
+
+    Ok(CommandResult {
+        outcome,
+        appended: true,
+        write: Some(write),
+    })
+}
+
+async fn release(
+    client: &Client,
+    stream: &str,
+    command: &ReleaseCommand,
+) -> Result<CommandResult, Box<dyn Error>> {
+    let (state, revision) = read_inventory(client, stream).await?;
+
+    if let Some(previous) = state
+        .processed_operations
+        .get(&command.0.operation_id)
+    {
+        return match previous {
+            ProcessedOperation::Released { event, .. } if event == &command.0 => {
+                Ok(CommandResult {
+                    outcome: previous.clone(),
+                    appended: false,
+                    write: None,
+                })
+            }
+            _ => Err(Box::new(OperationIdConflict(command.0.operation_id))),
+        };
+    }
+
+    if state.reservations.get(&command.0.reservation_id) != Some(&command.0.quantity) {
+        return Err(Box::new(InvalidInventoryCommand(
+            "the reservation is not active with the requested quantity",
+        )));
+    }
+
+    let write = append_at(client, stream, revision, command.event()?).await?;
+    let outcome = ProcessedOperation::Released {
+        event_revision: write.next_expected_version,
+        event: command.0.clone(),
+    };
+
+    Ok(CommandResult {
+        outcome,
+        appended: true,
+        write: Some(write),
+    })
 }
 
 #[tokio::main]
@@ -216,21 +368,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
     assert_eq!(second_state.available, 1);
     assert_eq!(first_revision, second_revision);
 
-    let first_attempt = ReservationAttempt::new(FIRST_CLIENT, &sku)?;
-    let second_attempt = ReservationAttempt::new(SECOND_CLIENT, &sku)?;
+    let first_attempt = ReserveCommand::new(FIRST_CLIENT, &sku);
+    let second_attempt = ReserveCommand::new(SECOND_CLIENT, &sku);
+    assert_ne!(first_attempt.0.operation_id.0, first_attempt.0.reservation_id.0);
+    assert_ne!(second_attempt.0.operation_id.0, second_attempt.0.reservation_id.0);
     // The shared expected revision serializes decisions made from the same inventory state.
     let (first_result, second_result) = tokio::join!(
         append_at(
             &first_client,
             inventory_stream.as_str(),
             first_revision,
-            first_attempt.event.clone(),
+            first_attempt.event()?,
         ),
         append_at(
             &second_client,
             inventory_stream.as_str(),
             second_revision,
-            second_attempt.event.clone(),
+            second_attempt.event()?,
         ),
     );
 
@@ -258,135 +412,136 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let (sold_out, sold_out_revision) =
         read_inventory(loser_client, inventory_stream.as_str()).await?;
     assert_eq!(sold_out.available, 0);
-    assert_eq!(sold_out.reservations, [(winner.reservation_id, 1)].into());
+    assert_eq!(sold_out.reservations, [(winner.0.reservation_id, 1)].into());
+    assert_eq!(sold_out_revision, 1);
 
-    let winner_release = ReleaseAttempt::new(&sku, winner.reservation_id)?;
-    assert_ne!(winner_release.operation_id, winner.operation_id);
-    let winner_release_write = append_at(
-        winner_client,
-        inventory_stream.as_str(),
-        sold_out_revision,
-        winner_release.event.clone(),
-    )
-    .await?;
-    assert_eq!(winner_release_write.next_expected_version, 2);
+    let winner_release = ReleaseCommand::new(&sku, winner.0.reservation_id);
+    assert_ne!(winner_release.0.operation_id, winner.0.operation_id);
+    let winner_release_result =
+        release(winner_client, inventory_stream.as_str(), &winner_release).await?;
+    assert!(winner_release_result.appended);
+    assert_eq!(winner_release_result.outcome.event_revision(), 2);
+    let winner_release_outcome = winner_release_result.outcome.clone();
 
     let (released, released_revision) =
         read_inventory(loser_client, inventory_stream.as_str()).await?;
     assert_eq!(released.available, 1);
     assert!(released.reservations.is_empty());
 
-    let loser_write = append_at(
-        loser_client,
-        inventory_stream.as_str(),
-        released_revision,
-        loser.event.clone(),
-    )
-    .await?;
-    assert_eq!(loser_write.next_expected_version, 3);
+    let loser_result = reserve(loser_client, inventory_stream.as_str(), loser).await?;
+    assert!(loser_result.appended);
+    assert_eq!(loser_result.outcome.event_revision(), 3);
+    let loser_outcome = loser_result.outcome.clone();
 
-    let loser_release = ReleaseAttempt::new(&sku, loser.reservation_id)?;
-    assert_ne!(loser_release.operation_id, loser.operation_id);
-    let loser_release_write = append_at(
-        loser_client,
-        inventory_stream.as_str(),
-        loser_write.next_expected_version,
-        loser_release.event.clone(),
-    )
-    .await?;
-    assert_eq!(loser_release_write.next_expected_version, 4);
+    let loser_release = ReleaseCommand::new(&sku, loser.0.reservation_id);
+    assert_ne!(loser_release.0.operation_id, loser.0.operation_id);
+    let loser_release_result =
+        release(loser_client, inventory_stream.as_str(), &loser_release).await?;
+    assert!(loser_release_result.appended);
+    assert_eq!(loser_release_result.outcome.event_revision(), 4);
+    let loser_release_outcome = loser_release_result.outcome.clone();
 
     let (available_again, available_again_revision) =
         read_inventory(winner_client, inventory_stream.as_str()).await?;
     assert_eq!(available_again.available, 1);
     assert!(available_again.reservations.is_empty());
+    assert_eq!(available_again_revision, 4);
 
-    let winner_again = ReservationAttempt::new(winner.client_name, &sku)?;
-    let winner_again_write = append_at(
+    let winner_again = ReserveCommand::new(&winner.0.client, &sku);
+    let winner_again_result =
+        reserve(winner_client, inventory_stream.as_str(), &winner_again).await?;
+    assert!(winner_again_result.appended);
+    assert_eq!(winner_again_result.outcome.event_revision(), 5);
+    let winner_again_outcome = winner_again_result.outcome.clone();
+
+    let winner_again_release = ReleaseCommand::new(&sku, winner_again.0.reservation_id);
+    let winner_again_release_result = release(
         winner_client,
         inventory_stream.as_str(),
-        available_again_revision,
-        winner_again.event.clone(),
+        &winner_again_release,
     )
     .await?;
-    assert_eq!(winner_again_write.next_expected_version, 5);
+    assert!(winner_again_release_result.appended);
+    assert_eq!(winner_again_release_result.outcome.event_revision(), 6);
+    let winner_again_release_outcome = winner_again_release_result.outcome.clone();
 
-    let winner_again_release = ReleaseAttempt::new(&sku, winner_again.reservation_id)?;
-    let winner_again_release_write = append_at(
-        winner_client,
-        inventory_stream.as_str(),
-        winner_again_write.next_expected_version,
-        winner_again_release.event.clone(),
-    )
-    .await?;
-    assert_eq!(winner_again_release_write.next_expected_version, 6);
-
-    // Durable retries retain the original expected revision and event ID after later writes.
+    // The original write tuple is enough only when a transport retry retained it unchanged.
     let winner_retry = append_at(
         winner_client,
         inventory_stream.as_str(),
         first_revision,
-        winner.event.clone(),
-    )
-    .await?;
-    let winner_release_retry = append_at(
-        winner_client,
-        inventory_stream.as_str(),
-        sold_out_revision,
-        winner_release.event,
-    )
-    .await?;
-    let loser_retry = append_at(
-        loser_client,
-        inventory_stream.as_str(),
-        released_revision,
-        loser.event.clone(),
-    )
-    .await?;
-    let loser_release_retry = append_at(
-        loser_client,
-        inventory_stream.as_str(),
-        loser_write.next_expected_version,
-        loser_release.event,
-    )
-    .await?;
-    let winner_again_retry = append_at(
-        winner_client,
-        inventory_stream.as_str(),
-        available_again_revision,
-        winner_again.event,
-    )
-    .await?;
-    let winner_again_release_retry = append_at(
-        winner_client,
-        inventory_stream.as_str(),
-        winner_again_write.next_expected_version,
-        winner_again_release.event,
+        winner.event()?,
     )
     .await?;
     assert_eq!(winner_retry.position, winner_write.position);
-    assert_eq!(winner_release_retry.position, winner_release_write.position);
-    assert_eq!(loser_retry.position, loser_write.position);
-    assert_eq!(loser_release_retry.position, loser_release_write.position);
-    assert_eq!(winner_again_retry.position, winner_again_write.position);
-    assert_eq!(
-        winner_again_release_retry.position,
-        winner_again_release_write.position
-    );
+
+    let winner_outcome = ProcessedOperation::Reserved {
+        event_revision: winner_write.next_expected_version,
+        event: winner.0.clone(),
+    };
+
+    // Delayed redelivery has lost the old revision, so the folded operation outcome is authoritative.
+    let winner_replay = reserve(winner_client, inventory_stream.as_str(), winner).await?;
+    let winner_release_replay =
+        release(winner_client, inventory_stream.as_str(), &winner_release).await?;
+    let loser_replay = reserve(loser_client, inventory_stream.as_str(), loser).await?;
+    let loser_release_replay =
+        release(loser_client, inventory_stream.as_str(), &loser_release).await?;
+    let winner_again_replay =
+        reserve(winner_client, inventory_stream.as_str(), &winner_again).await?;
+    let winner_again_release_replay = release(
+        winner_client,
+        inventory_stream.as_str(),
+        &winner_again_release,
+    )
+    .await?;
+
+    for (replay, original) in [
+        (winner_replay, winner_outcome),
+        (winner_release_replay, winner_release_outcome),
+        (loser_replay, loser_outcome),
+        (loser_release_replay, loser_release_outcome),
+        (winner_again_replay, winner_again_outcome),
+        (winner_again_release_replay, winner_again_release_outcome),
+    ] {
+        assert!(!replay.appended);
+        assert!(replay.write.is_none());
+        assert_eq!(replay.outcome, original);
+    }
+
+    let conflicting_command = ReserveCommand(InventoryReserved {
+        operation_id: winner.0.operation_id,
+        reservation_id: ReservationId::new(),
+        client: winner.0.client.clone(),
+        sku: sku.clone(),
+        quantity: 1,
+    });
+    let conflict = reserve(
+        winner_client,
+        inventory_stream.as_str(),
+        &conflicting_command,
+    )
+    .await
+    .expect_err("reusing an operation ID with different content must fail");
+    assert!(conflict.downcast_ref::<OperationIdConflict>().is_some());
 
     let (final_state, final_revision) =
         read_inventory(&first_client, inventory_stream.as_str()).await?;
     assert_eq!(final_revision, 6);
     assert_eq!(final_state.available, 1);
     assert!(final_state.reservations.is_empty());
+    assert_eq!(final_state.processed_operations.len(), 6);
 
     println!(
         "{} won the first race and released reservation {}; {} then reserved and released after reloading revision {}",
-        winner.client_name, winner.reservation_id.0, loser.client_name, released_revision
+        winner.0.client, winner.0.reservation_id.0, loser.0.client, released_revision
     );
     println!(
-        "{} completed a second reserve/release cycle; all six retries remained single events after revision {final_revision}",
-        winner.client_name
+        "{} completed a second reserve/release cycle; six delayed command replays returned their original outcomes after revision {final_revision}",
+        winner.0.client
+    );
+    println!(
+        "The example retains every processed operation in the inventory stream; production systems must budget for that unbounded history and index cost"
     );
 
     Ok(())
