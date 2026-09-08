@@ -43,6 +43,7 @@ jobs:
       fail-fast: false
       matrix:
         test:
+          - single_node_idempotency
           - single_node_streams
           - single_node_projections
           - single_node_persistent_subscriptions

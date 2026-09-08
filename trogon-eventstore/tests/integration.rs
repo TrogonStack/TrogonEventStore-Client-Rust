@@ -259,6 +259,7 @@ impl Tests {
 }
 
 enum ApiTests {
+    Idempotency,
     Streams,
     PersistentSubscriptions,
     Projections,
@@ -353,6 +354,7 @@ async fn run_test(test: impl Into<Tests>, topology: Topologies) -> eyre::Result<
 
     let result = match test {
         Tests::Api(test) => match test {
+            ApiTests::Idempotency => api::idempotency::tests(predifined_client).await,
             ApiTests::Streams => api::streams::tests(predifined_client).await,
             ApiTests::PersistentSubscriptions => {
                 api::persistent_subscriptions::tests(predifined_client).await
@@ -374,6 +376,11 @@ async fn run_test(test: impl Into<Tests>, topology: Topologies) -> eyre::Result<
 
     result?;
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn single_node_idempotency() -> eyre::Result<()> {
+    run_test(ApiTests::Idempotency, Topologies::SingleNode).await
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -1,3 +1,4 @@
+pub mod idempotency;
 pub mod operations;
 pub mod persistent_subscriptions;
 pub mod projections;
