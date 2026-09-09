@@ -1,5 +1,5 @@
 {
-  "trogon-eventstore": "0.1.0",
-  "trogon-eventstore-macros": "0.1.0",
-  "trogon-eventstore-extras": "0.1.0"
+  "trogon-eventstore": "0.2.0",
+  "trogon-eventstore-macros": "0.2.0",
+  "trogon-eventstore-extras": "0.2.0"
 }
