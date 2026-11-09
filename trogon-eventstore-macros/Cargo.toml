@@ -1,7 +1,7 @@
 [package]
 authors = ["Straw Hat, LLC"]
 name = "trogon-eventstore-macros"
-version = "0.1.0"
+version = "0.2.0"
 publish = false
 edition = "2021"
 license = "Apache-2.0 AND MIT"
